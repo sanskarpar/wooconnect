@@ -9,7 +9,7 @@ import { authOptions } from '@/pages/api/auth/[...nextauth]';
 
 // ...existing code...
 
-export async function GET(req: NextRequest, { params }: { params: { storeName: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ "store name": string }> }) {
   try {
     const session = await getServerSession(authOptions) as { user?: { id?: string } };
     if (!session?.user?.id) {
@@ -17,7 +17,8 @@ export async function GET(req: NextRequest, { params }: { params: { storeName: s
     }
 
     const uid = session.user.id;
-    const storeName = decodeURIComponent(params.storeName);
+    const resolvedParams = await params;
+    const storeName = decodeURIComponent(resolvedParams["store name"]);
     const client = await clientPromise;
     const db = client.db('wooconnect');
     const stores = db.collection('stores');
