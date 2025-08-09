@@ -11,7 +11,7 @@ import { authOptions } from '@/pages/api/auth/[...nextauth]';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { 'store name': string; productId: string } }
+  { params }: { params: Promise<{ 'store name': string; productId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions) as { user?: { id?: string } };
@@ -20,8 +20,9 @@ export async function DELETE(
     }
 
     const uid = session.user.id;
-    const storeName = decodeURIComponent(params['store name']);
-    const productId = params.productId;
+    const resolvedParams = await params;
+    const storeName = decodeURIComponent(resolvedParams['store name']);
+    const productId = resolvedParams.productId;
     
     console.log('Deleting product:', productId, 'for store:', storeName);
 
@@ -68,7 +69,7 @@ export async function DELETE(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { 'store name': string; productId: string } }
+  { params }: { params: Promise<{ 'store name': string; productId: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions) as { user?: { id?: string } };
@@ -77,8 +78,9 @@ export async function PUT(
     }
 
     const uid = session.user.id;
-    const storeName = decodeURIComponent(params['store name']);
-    const productId = params.productId;
+    const resolvedParams = await params;
+    const storeName = decodeURIComponent(resolvedParams['store name']);
+    const productId = resolvedParams.productId;
     const updateData = await request.json();
     
     console.log('Updating product:', productId, 'for store:', storeName, updateData);

@@ -21,10 +21,11 @@ async function getStoreCredentials(storeName: string) {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { 'store name': string } }
+  { params }: { params: Promise<{ 'store name': string }> }
 ) {
   try {
-    const storeName = decodeURIComponent(params['store name']);
+    const resolvedParams = await params;
+    const storeName = decodeURIComponent(resolvedParams['store name']);
     console.log('Fetching products for store:', storeName);
 
     // Fetch WooCommerce credentials from DB

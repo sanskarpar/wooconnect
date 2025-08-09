@@ -8,14 +8,15 @@ import { authOptions } from '@/pages/api/auth/[...nextauth]';
 // ...existing code...
 // ...existing code...
 
-export async function GET(req: NextRequest, { params }: { params: { 'store name': string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ 'store name': string }> }) {
   try {
     const session = await getServerSession(authOptions) as { user?: { id?: string } };
     if (!session?.user?.id) {
       return NextResponse.json({ message: 'Unauthorized. Please log in.' }, { status: 401 });
     }
     const uid = session.user.id;
-    const storeName = decodeURIComponent(params['store name']);
+    const resolvedParams = await params;
+    const storeName = decodeURIComponent(resolvedParams['store name']);
   const client = await clientPromise;
     const db = client.db('wooconnect');
     const stores = db.collection('stores');
