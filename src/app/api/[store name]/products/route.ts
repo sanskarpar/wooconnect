@@ -110,10 +110,11 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { 'store name': string } }
+  { params }: { params: Promise<{ 'store name': string }> }
 ) {
   try {
-    const storeName = decodeURIComponent(params['store name']);
+    const resolvedParams = await params;
+    const storeName = decodeURIComponent(resolvedParams['store name']);
     const productData = await request.json();
     console.log('Creating product for store:', storeName, productData);
 
