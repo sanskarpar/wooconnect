@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient, ObjectId } from 'mongodb';
+import clientPromise from '@/lib/mongodb';
+import { ObjectId } from 'mongodb';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/wooconnect';
-let cachedClient: MongoClient | null = null;
+// MongoDB URI and client handled in lib/mongodb
+// ...existing code...
 
-async function getClient() {
-  if (cachedClient) return cachedClient;
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  cachedClient = client;
-  return client;
-}
+// ...existing code...
 
 // Default professional UK invoice settings
 const defaultSettings = {
@@ -89,7 +84,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized. Please log in.' }, { status: 401 });
     }
     const uid = session.user.id;
-    const client = await getClient();
+  const client = await clientPromise;
     const db = client.db('wooconnect');
     const users = db.collection('users');
     const user = await users.findOne({ _id: new ObjectId(uid) });
@@ -199,7 +194,7 @@ export async function POST(req: NextRequest) {
       showTaxBreakdown: settings.showTaxBreakdown
     });
     
-    const client = await getClient();
+  const client = await clientPromise;
     const db = client.db('wooconnect');
     const users = db.collection('users');
     

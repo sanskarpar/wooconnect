@@ -1,19 +1,13 @@
 // Removed 'use client' to ensure server-only execution
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient } from 'mongodb';
+import clientPromise from '@/lib/mongodb';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/wooconnect';
-let cachedClient: MongoClient | null = null;
+// MongoDB URI and client handled in lib/mongodb
+// ...existing code...
 
-async function getClient() {
-  if (cachedClient) return cachedClient;
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  cachedClient = client;
-  return client;
-}
+// ...existing code...
 
 export async function GET(req: NextRequest, { params }: { params: { 'store name': string } }) {
   try {
@@ -24,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: { 'store name'
 
     const uid = session.user.id;
     const storeName = decodeURIComponent(params['store name']);
-    const client = await getClient();
+  const client = await clientPromise;
     const db = client.db('wooconnect');
     const stores = db.collection('stores');
 

@@ -1,19 +1,13 @@
 // Removed 'use client' to ensure server-only execution
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient } from 'mongodb';
+import clientPromise from '@/lib/mongodb';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/wooconnect';
-let cachedClient: MongoClient | null = null;
+// MongoDB URI and client handled in lib/mongodb
+// ...existing code...
 
-async function getClient() {
-  if (cachedClient) return cachedClient;
-  const client = new MongoClient(MONGODB_URI);
-  await client.connect();
-  cachedClient = client;
-  return client;
-}
+// ...existing code...
 
 export async function DELETE(
   request: NextRequest,
@@ -31,7 +25,7 @@ export async function DELETE(
     
     console.log('Deleting product:', productId, 'for store:', storeName);
 
-    const client = await getClient();
+  const client = await clientPromise;
     const db = client.db('wooconnect');
     const stores = db.collection('stores');
 
@@ -89,7 +83,7 @@ export async function PUT(
     
     console.log('Updating product:', productId, 'for store:', storeName, updateData);
 
-    const client = await getClient();
+  const client = await clientPromise;
     const db = client.db('wooconnect');
     const stores = db.collection('stores');
 
