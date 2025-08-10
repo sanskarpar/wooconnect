@@ -62,7 +62,6 @@ interface InvoiceSettings {
   notes: string;
   
   // Professional Features
-  digitalSignature: string;
   approvedBy: string;
   invoiceStatus: boolean;
   showPaymentTerms: boolean;
@@ -73,68 +72,67 @@ interface InvoiceSettings {
 const defaultSettings: InvoiceSettings = {
   // Basic Info
   logoUrl: '',
-  colorScheme: '#1e293b',
-  accentColor: '#0f172a',
+  colorScheme: '#000000',
+  accentColor: '#000000',
   
   // Company Details
-  companyName: '',
+  companyName: 'Max Mustermann',
   companyRegNumber: '',
-  vatNumber: '',
-  companyAddress: '',
-  companyCity: '',
-  companyPostcode: '',
-  companyCountry: 'United Kingdom',
+  vatNumber: '122173244432',
+  companyAddress: 'Straße 232',
+  companyCity: 'Berlin',
+  companyPostcode: '10115',
+  companyCountry: 'Deutschland',
   companyEmail: '',
   companyPhone: '',
   companyWebsite: '',
   
   // Invoice Configuration
-  invoicePrefix: 'INV',
-  invoiceNumberFormat: 'INV-{YYYY}{MM}{DD}-{###}',
+  invoicePrefix: '',
+  invoiceNumberFormat: '{YYYY} - {###}',
   dueDays: 30,
-  lateFeePercentage: 2.5,
+  lateFeePercentage: 0,
   discountType: 'percentage',
   
   // Layout & Styling
   fontSize: 'medium',
-  showLogo: true,
+  showLogo: false,
   logoPosition: 'left',
-  headerHeight: 120,
+  headerHeight: 80,
   showWatermark: false,
-  watermarkText: 'INVOICE',
+  watermarkText: 'RECHNUNG',
   watermarkOpacity: 0.1,
   
   // Content
-  footerText: 'Thank you for your business!',
-  terms: 'Payment is due within 30 days of invoice date. Late payments may incur additional charges.',
+  footerText: 'Steuerbefreit nach § 19 UStG',
+  terms: '',
   privacyPolicy: '',
   bankDetails: '',
-  paymentInstructions: 'Please reference the invoice number when making payment.',
+  paymentInstructions: '',
   
   // Tax Settings
-  defaultTaxRate: 20,
-  showTaxBreakdown: true,
-  taxLabel: 'VAT',
+  defaultTaxRate: 0,
+  showTaxBreakdown: false,
+  taxLabel: 'MwSt.',
   
   // Currency & Formatting
-  currency: 'GBP',
-  currencySymbol: '£',
-  dateFormat: 'DD/MM/YYYY',
-  numberFormat: 'UK',
+  currency: 'EUR',
+  currencySymbol: '€',
+  dateFormat: 'DD.MM.YYYY',
+  numberFormat: 'DE',
   
   // Additional Fields
-  purchaseOrderRef: true,
+  purchaseOrderRef: false,
   projectRef: false,
-  deliveryDate: false,
+  deliveryDate: true,
   notes: '',
   
   // Professional Features
-  digitalSignature: '',
   approvedBy: '',
-  invoiceStatus: true,
-  showPaymentTerms: true,
+  invoiceStatus: false,
+  showPaymentTerms: false,
   multiLanguage: false,
-  language: 'en-GB',
+  language: 'de-DE',
 };
 
 export default function InvoiceSettingsPage() {
@@ -430,17 +428,17 @@ export default function InvoiceSettingsPage() {
           <div className="settings-header">
             <div className="relative z-10">
               <h1 className="text-4xl font-bold mb-2 flex items-center justify-center">
-                <span className="mr-4 text-5xl">🧾</span> 
+                <span className="mr-4 text-5xl"></span> 
                 Professional Invoice Settings
               </h1>
               <p className="text-blue-100 text-lg">
                 Create stunning, professional invoices that reflect your brand
               </p>
               <div className="mt-4 flex justify-center space-x-4">
-                <span className="feature-badge">🇬🇧 UK Standards</span>
-                <span className="feature-badge">📊 VAT Compliant</span>
-                <span className="feature-badge">🎨 Customizable</span>
-                <span className="feature-badge">📱 Responsive</span>
+                <span className="feature-badge">UK Standards</span>
+                <span className="feature-badge">VAT Compliant</span>
+                <span className="feature-badge">Customizable</span>
+                <span className="feature-badge">Responsive</span>
               </div>
             </div>
           </div>
@@ -451,12 +449,10 @@ export default function InvoiceSettingsPage() {
               <div className="border-b border-gray-200">
                 <nav className="-mb-px flex space-x-2 overflow-x-auto">
                   {[
-                    { id: 'general', label: 'General', icon: '⚙️' },
-                    { id: 'company', label: 'Company', icon: '🏢' },
-                    { id: 'layout', label: 'Layout', icon: '🎨' },
-                    { id: 'content', label: 'Content', icon: '📝' },
-                    { id: 'tax-currency', label: 'Tax & Currency', icon: '💰' },
-                    { id: 'advanced', label: 'Advanced', icon: '🚀' }
+                    { id: 'general', label: 'General', icon: '' },
+                    { id: 'company', label: 'Company', icon: '' },
+                    { id: 'tax-currency', label: 'Tax & Currency', icon: '' },
+                    { id: 'advanced', label: 'Advanced', icon: '' }
                   ].map((tab) => (
                     <button
                       key={tab.id}
@@ -467,6 +463,7 @@ export default function InvoiceSettingsPage() {
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
                       }`}
                     >
+                      {/* Removed emoji from tab icon */}
                       <span>{tab.icon}</span>
                       <span>{tab.label}</span>
                     </button>
@@ -480,60 +477,14 @@ export default function InvoiceSettingsPage() {
               {activeTab === 'general' && (
                 <div className="settings-section">
                   <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    <span className="mr-3">⚙️</span> General Settings
+                    {/* Removed emoji */}
+                    <span className="mr-3"></span> General Settings
                   </h2>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block font-semibold mb-3 text-gray-700">Professional UK Invoice Template</label>
-                        <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-6 border border-slate-200">
-                          <div className="flex items-center space-x-3 mb-3">
-                            <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center">
-                              <span className="text-white font-bold text-lg">UK</span>
-                            </div>
-                            <div>
-                              <h3 className="font-semibold text-slate-800">UK Professional Standard</h3>
-                              <p className="text-sm text-slate-600">VAT compliant • HMRC approved • Modern design</p>
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">✓ VAT Ready</span>
-                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">✓ Professional</span>
-                            <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">✓ Customizable</span>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div>
-                        <label className="block font-semibold mb-3 text-gray-700">Logo Upload</label>
-                        <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors">
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            onChange={handleLogoUpload} 
-                            className="hidden" 
-                            id="logoUpload"
-                          />
-                          <label htmlFor="logoUpload" className="cursor-pointer">
-                            {settings.logoUrl ? (
-                              <div className="space-y-3">
-                                <img src={settings.logoUrl} alt="Logo" className="h-20 mx-auto border rounded-lg shadow-sm" />
-                                <p className="text-sm text-blue-600">Click to change logo</p>
-                              </div>
-                            ) : (
-                              <div className="space-y-3">
-                                <div className="text-4xl">📷</div>
-                                <p className="text-gray-600">Click to upload your logo</p>
-                                <p className="text-xs text-gray-400">PNG, JPG up to 2MB</p>
-                              </div>
-                            )}
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-6">
-                      <div>
+                    {/* Remove left column */}
+                    {/* Primary Color and Accent Color side by side */}
+                    <div className="flex flex-row gap-8">
+                      <div className="flex-1">
                         <label className="block font-semibold mb-3 text-gray-700">Primary Color</label>
                         <div className="flex space-x-4">
                           <div className="color-picker-wrapper w-16 h-12 rounded-lg overflow-hidden">
@@ -543,8 +494,7 @@ export default function InvoiceSettingsPage() {
                         </div>
                         <p className="text-sm text-gray-500 mt-2">Primary brand color for headers and accents</p>
                       </div>
-                      
-                      <div>
+                      <div className="flex-1">
                         <label className="block font-semibold mb-3 text-gray-700">Accent Color</label>
                         <div className="flex space-x-4">
                           <div className="color-picker-wrapper w-16 h-12 rounded-lg overflow-hidden">
@@ -553,17 +503,6 @@ export default function InvoiceSettingsPage() {
                           <input type="text" name="accentColor" value={settings.accentColor} onChange={handleChange} className="form-input flex-1 border rounded-lg px-4 py-3 text-gray-700" placeholder="#1e40af" />
                         </div>
                         <p className="text-sm text-gray-500 mt-2">Secondary color for highlights and buttons</p>
-                      </div>
-
-                      <div className="preview-box">
-                        <h3 className="font-semibold text-gray-700 mb-2">✨ Live Preview</h3>
-                        <p className="text-sm text-gray-600 mb-4">See how your settings will look</p>
-                        <button 
-                          onClick={handlePreview}
-                          className="btn-primary px-6 py-2 rounded-lg font-semibold"
-                        >
-                          Generate Preview PDF
-                        </button>
                       </div>
                     </div>
                   </div>
@@ -574,7 +513,8 @@ export default function InvoiceSettingsPage() {
               {activeTab === 'company' && (
                 <div className="settings-section">
                   <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    <span className="mr-3">🏢</span> Company Information
+                    {/* Removed emoji */}
+                    <span className="mr-3"></span> Company Information
                   </h2>
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div className="space-y-6">
@@ -709,277 +649,19 @@ export default function InvoiceSettingsPage() {
                 </div>
               )}
 
-              {/* Layout Tab */}
-              {activeTab === 'layout' && (
-                <div className="settings-section">
-                  <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    <span className="mr-3">🎨</span> Layout & Design
-                  </h2>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                      <div>
-                        <label className="block font-semibold mb-3 text-gray-700">Font Size</label>
-                        <select 
-                          name="fontSize" 
-                          value={settings.fontSize} 
-                          onChange={handleChange} 
-                          className="form-input w-full border rounded-xl px-4 py-3 text-gray-700"
-                        >
-                          <option value="small">Small (10pt) - Compact</option>
-                          <option value="medium">Medium (12pt) - Standard</option>
-                          <option value="large">Large (14pt) - Readable</option>
-                        </select>
-                        <p className="text-sm text-gray-500 mt-2">Choose font size for better readability</p>
-                      </div>
-                      
-                      <div>
-                        <label className="block font-semibold mb-3 text-gray-700">Logo Position</label>
-                        <div className="grid grid-cols-3 gap-3">
-                          {['left', 'center', 'right'].map((position) => (
-                            <label key={position} className="relative">
-                              <input
-                                type="radio"
-                                name="logoPosition"
-                                value={position}
-                                checked={settings.logoPosition === position}
-                                onChange={handleChange}
-                                className="sr-only"
-                              />
-                              <div className={`border-2 rounded-xl p-4 text-center cursor-pointer transition-all ${
-                                settings.logoPosition === position 
-                                  ? 'border-blue-500 bg-blue-50 text-blue-700' 
-                                  : 'border-gray-300 hover:border-blue-300'
-                              }`}>
-                                <div className="text-2xl mb-2">
-                                  {position === 'left' ? '⬅️' : position === 'center' ? '⬆️' : '➡️'}
-                                </div>
-                                <span className="capitalize font-medium">{position}</span>
-                              </div>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold mb-3 text-gray-700">Header Height</label>
-                        <div className="space-y-3">
-                          <input 
-                            type="range" 
-                            name="headerHeight" 
-                            min="80" 
-                            max="200" 
-                            value={settings.headerHeight} 
-                            onChange={handleChange} 
-                            className="w-full accent-blue-500"
-                          />
-                          <div className="flex justify-between text-sm text-gray-500">
-                            <span>80px (Compact)</span>
-                            <span className="font-semibold text-blue-600">{settings.headerHeight}px</span>
-                            <span>200px (Spacious)</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold mb-3 text-gray-700">Date Format</label>
-                        <select 
-                          name="dateFormat" 
-                          value={settings.dateFormat} 
-                          onChange={handleChange} 
-                          className="form-input w-full border rounded-xl px-4 py-3 text-gray-700"
-                        >
-                          <option value="DD/MM/YYYY">DD/MM/YYYY (UK Standard)</option>
-                          <option value="MM/DD/YYYY">MM/DD/YYYY (US Format)</option>
-                          <option value="YYYY-MM-DD">YYYY-MM-DD (ISO Format)</option>
-                          <option value="DD MMM YYYY">DD MMM YYYY (Readable)</option>
-                        </select>
-                        <p className="text-sm text-gray-500 mt-2">
-                          Preview: {new Date().toLocaleDateString('en-GB', { 
-                            day: '2-digit', 
-                            month: settings.dateFormat.includes('MMM') ? 'short' : '2-digit', 
-                            year: 'numeric' 
-                          })}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-6">
-                      <div className="bg-gray-50 rounded-xl p-6">
-                        <h3 className="font-semibold text-gray-700 mb-4">Visual Features</h3>
-                        <div className="checkbox-group space-y-3">
-                          <label className="checkbox-item">
-                            <input 
-                              type="checkbox" 
-                              name="showLogo" 
-                              checked={settings.showLogo} 
-                              onChange={handleToggle} 
-                            />
-                            <span>Show Company Logo</span>
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="preview-box">
-                        <h3 className="font-semibold text-gray-700 mb-2">✨ Live Preview</h3>
-                        <p className="text-sm text-gray-600 mb-4">See how your settings will look</p>
-                        <button 
-                          onClick={handlePreview}
-                          className="btn-primary px-6 py-2 rounded-lg font-semibold"
-                        >
-                          Generate Preview PDF
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Content Tab */}
-              {activeTab === 'content' && (
-                <div className="settings-section">
-                  <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    <span className="mr-3">📝</span> Content & Text
-                  </h2>
-                  <div className="space-y-8">
-                    {/* Text Content */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                      <div className="space-y-6">
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Footer Message</label>
-                          <input 
-                            name="footerText" 
-                            value={settings.footerText} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700" 
-                            placeholder="Thank you for your business!" 
-                          />
-                          <p className="text-sm text-gray-500 mt-2">Friendly message at the bottom of invoice</p>
-                        </div>
-                        
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Payment Instructions</label>
-                          <textarea 
-                            name="paymentInstructions" 
-                            value={settings.paymentInstructions} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700 h-24 resize-none" 
-                            placeholder="Please reference the invoice number when making payment." 
-                          />
-                          <p className="text-sm text-gray-500 mt-2">Clear instructions for customers (leave empty to hide)</p>
-                        </div>
-
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Additional Notes</label>
-                          <textarea 
-                            name="notes" 
-                            value={settings.notes} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700 h-20 resize-none" 
-                            placeholder="Additional information or special instructions..." 
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-6">
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Terms & Conditions</label>
-                          <textarea 
-                            name="terms" 
-                            value={settings.terms} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700 h-32 resize-none" 
-                            placeholder="Payment is due within 30 days of invoice date. Late payments may incur additional charges." 
-                          />
-                          <p className="text-sm text-gray-500 mt-2">Legal terms and payment conditions (leave empty to hide)</p>
-                        </div>
-                        
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Bank Details</label>
-                          <textarea 
-                            name="bankDetails" 
-                            value={settings.bankDetails} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700 h-24 resize-none" 
-                            placeholder="Bank Name: Your Bank&#10;Sort Code: 12-34-56&#10;Account: 12345678&#10;IBAN: GB29 NWBK 1234 5612 3456 78" 
-                          />
-                          <p className="text-sm text-gray-500 mt-2">Payment details for bank transfers (leave empty to hide)</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Invoice Configuration - Moved to General Tab */}
-                    <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
-                      <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                        <span className="mr-2">⚙️</span> Basic Invoice Settings
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Invoice Prefix</label>
-                          <input 
-                            name="invoicePrefix" 
-                            value={settings.invoicePrefix} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700" 
-                            placeholder="INV" 
-                          />
-                          <p className="text-xs text-gray-500 mt-1">e.g., INV, BILL, DOC</p>
-                        </div>
-                        
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Payment Due (Days)</label>
-                          <input 
-                            type="number" 
-                            name="dueDays" 
-                            value={settings.dueDays} 
-                            onChange={handleChange} 
-                            className={`form-input w-full border rounded-xl px-4 py-3 text-gray-700 ${
-                              errors.dueDays ? 'border-red-500 bg-red-50' : ''
-                            }`} 
-                            min="0" 
-                            max="365" 
-                          />
-                          {errors.dueDays && (
-                            <p className="text-red-500 text-sm mt-1">{errors.dueDays}</p>
-                          )}
-                          <p className="text-xs text-gray-500 mt-1">Days until payment is due</p>
-                        </div>
-
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Late Fee (%)</label>
-                          <input 
-                            type="number" 
-                            name="lateFeePercentage" 
-                            value={settings.lateFeePercentage} 
-                            onChange={handleChange} 
-                            className={`form-input w-full border rounded-xl px-4 py-3 text-gray-700 ${
-                              errors.lateFeePercentage ? 'border-red-500 bg-red-50' : ''
-                            }`} 
-                            min="0" 
-                            max="50" 
-                            step="0.1" 
-                          />
-                          {errors.lateFeePercentage && (
-                            <p className="text-red-500 text-sm mt-1">{errors.lateFeePercentage}</p>
-                          )}
-                          <p className="text-xs text-gray-500 mt-1">Percentage for late payments</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Tax & Currency Tab */}
               {activeTab === 'tax-currency' && (
                 <div className="settings-section">
                   <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    <span className="mr-3">💰</span> Tax & Currency Settings
+                    {/* Removed emoji */}
+                    <span className="mr-3"></span> Tax & Currency Settings
                   </h2>
                   <div className="space-y-8">
                     {/* Currency Settings */}
                     <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl p-6 border border-yellow-200">
                       <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                        <span className="mr-2">💱</span> Currency Configuration
+                        {/* Removed emoji */}
+                        <span className="mr-2"></span> Currency Configuration
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
@@ -1029,7 +711,8 @@ export default function InvoiceSettingsPage() {
                     {/* Tax Settings */}
                     <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-200">
                       <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                        <span className="mr-2">📊</span> Tax Configuration
+                        {/* Removed emoji */}
+                        <span className="mr-2"></span> Tax Configuration
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="space-y-6">
@@ -1112,7 +795,7 @@ export default function InvoiceSettingsPage() {
                           </div>
 
                           <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-                            <h4 className="font-semibold text-amber-700 mb-2">💡 Tax Tips</h4>
+                            <h4 className="font-semibold text-amber-700 mb-2">Tax Tips</h4>
                             <ul className="text-sm text-amber-600 space-y-1">
                               <li>• UK Standard VAT: 20%</li>
                               <li>• EU VAT: varies by country</li>
@@ -1131,183 +814,26 @@ export default function InvoiceSettingsPage() {
               {activeTab === 'advanced' && (
                 <div className="settings-section">
                   <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    <span className="mr-3">🚀</span> Advanced Features
+                    {/* Removed emoji */}
+                    <span className="mr-3"></span> Advanced Features
                   </h2>
                   <div className="space-y-8">
-                    {/* Language & Localization */}
-                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-6 border border-purple-200">
-                      <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                        <span className="mr-2">🌍</span> Language & Localization
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Language</label>
-                          <select 
-                            name="language" 
-                            value={settings.language} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700"
-                          >
-                            <option value="en-GB">🇬🇧 English (UK)</option>
-                            <option value="en-US">🇺🇸 English (US)</option>
-                            <option value="fr-FR">🇫🇷 Français</option>
-                            <option value="de-DE">🇩🇪 Deutsch</option>
-                            <option value="es-ES">🇪🇸 Español</option>
-                          </select>
-                        </div>
-                        
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Invoice Number Format</label>
-                          <input 
-                            name="invoiceNumberFormat" 
-                            value={settings.invoiceNumberFormat} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700" 
-                            placeholder="INV-{YYYY}{MM}{DD}-{###}" 
-                          />
-                          <p className="text-sm text-gray-500 mt-2">
-                            Use {`{YYYY}, {MM}, {DD}, {###}`} for date and sequence
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Digital Signature */}
+                    {/* Issuing Authority */}
                     <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-xl p-6 border border-green-200">
                       <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                        <span className="mr-2">✍️</span> Digital Signature
+                        {/* Removed emoji */}
+                        <span className="mr-2"></span> Issuing Authority
                       </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Signature Upload</label>
-                          <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-green-400 transition-colors">
-                            <input 
-                              type="file" 
-                              accept="image/*" 
-                              onChange={(e) => {
-                                if (e.target.files && e.target.files[0]) {
-                                  const file = e.target.files[0];
-                                  const url = URL.createObjectURL(file);
-                                  setSettings(prev => ({ ...prev, digitalSignature: url }));
-                                }
-                              }} 
-                              className="hidden" 
-                              id="signatureUpload"
-                            />
-                            <label htmlFor="signatureUpload" className="cursor-pointer">
-                              {settings.digitalSignature ? (
-                                <div className="space-y-3">
-                                  <img src={settings.digitalSignature} alt="Signature" className="h-16 mx-auto border rounded-lg shadow-sm" />
-                                  <p className="text-sm text-green-600">Click to change signature</p>
-                                </div>
-                              ) : (
-                                <div className="space-y-3">
-                                  <div className="text-4xl">✍️</div>
-                                  <p className="text-gray-600">Upload your signature</p>
-                                  <p className="text-xs text-gray-400">PNG, JPG recommended</p>
-                                </div>
-                              )}
-                            </label>
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Authorized By</label>
-                          <input 
-                            name="approvedBy" 
-                            value={settings.approvedBy} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700" 
-                            placeholder="John Smith, Director" 
-                          />
-                          <p className="text-sm text-gray-500 mt-2">Name and title of authorized person</p>
-                          
-                          <div className="mt-4">
-                            <label className="block font-semibold mb-3 text-gray-700">Privacy Policy</label>
-                            <textarea 
-                              name="privacyPolicy" 
-                              value={settings.privacyPolicy} 
-                              onChange={handleChange} 
-                              className="form-input w-full border rounded-xl px-4 py-3 text-gray-700 h-24 resize-none" 
-                              placeholder="Brief privacy policy or data protection notice..." 
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Additional Features */}
-                    <div className="bg-gray-50 rounded-xl p-6">
-                      <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                        <span className="mr-2">⚡</span> Additional Features
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div>
-                          <h4 className="font-medium text-gray-700 mb-3">Invoice Fields</h4>
-                          <div className="checkbox-group space-y-3">
-                            <label className="checkbox-item">
-                              <input 
-                                type="checkbox" 
-                                name="purchaseOrderRef" 
-                                checked={settings.purchaseOrderRef} 
-                                onChange={handleToggle} 
-                              />
-                              <span>Purchase Order Reference</span>
-                            </label>
-                            <label className="checkbox-item">
-                              <input 
-                                type="checkbox" 
-                                name="projectRef" 
-                                checked={settings.projectRef} 
-                                onChange={handleToggle} 
-                              />
-                              <span>Project Reference</span>
-                            </label>
-                            <label className="checkbox-item">
-                              <input 
-                                type="checkbox" 
-                                name="deliveryDate" 
-                                checked={settings.deliveryDate} 
-                                onChange={handleToggle} 
-                              />
-                              <span>Delivery Date</span>
-                            </label>
-                            <label className="checkbox-item">
-                              <input 
-                                type="checkbox" 
-                                name="invoiceStatus" 
-                                checked={settings.invoiceStatus} 
-                                onChange={handleToggle} 
-                              />
-                              <span>Show Invoice Status Badge</span>
-                            </label>
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <h4 className="font-medium text-gray-700 mb-3">Advanced Options</h4>
-                          <div className="checkbox-group space-y-3">
-                            <label className="checkbox-item">
-                              <input 
-                                type="checkbox" 
-                                name="multiLanguage" 
-                                checked={settings.multiLanguage} 
-                                onChange={handleToggle} 
-                              />
-                              <span>Multi-language Support</span>
-                            </label>
-                          </div>
-                          
-                          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                            <h5 className="font-medium text-blue-800 mb-2">🔮 Coming Soon</h5>
-                            <ul className="text-sm text-blue-600 space-y-1">
-                              <li>• Auto currency conversion</li>
-                              <li>• Electronic signatures</li>
-                              <li>• Payment gateway integration</li>
-                              <li>• Advanced templates</li>
-                            </ul>
-                          </div>
-                        </div>
+                      <div className="max-w-md">
+                        <label className="block font-semibold mb-3 text-gray-700">Authorized By</label>
+                        <input 
+                          name="approvedBy" 
+                          value={settings.approvedBy} 
+                          onChange={handleChange} 
+                          className="form-input w-full border rounded-xl px-4 py-3 text-gray-700" 
+                          placeholder="John Smith, Director" 
+                        />
+                        <p className="text-sm text-gray-500 mt-2">Name and title of authorized person</p>
                       </div>
                     </div>
                   </div>
@@ -1318,20 +844,7 @@ export default function InvoiceSettingsPage() {
             {/* Enhanced Action Buttons */}
             <div className="action-buttons mt-12 pt-8 border-t">
               <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 sm:space-x-4">
-                <button 
-                  onClick={handleReset} 
-                  className="btn-secondary px-6 py-3 rounded-xl font-semibold transition-all hover:scale-105"
-                >
-                  🔄 Reset to Defaults
-                </button>
-                
                 <div className="flex space-x-4">
-                  <button 
-                    onClick={handlePreview} 
-                    className="px-8 py-3 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl font-semibold transition-all hover:scale-105 hover:shadow-lg"
-                  >
-                    👁️ Preview Invoice
-                  </button>
                   <button 
                     onClick={handleSave} 
                     disabled={saving} 
@@ -1348,16 +861,10 @@ export default function InvoiceSettingsPage() {
                         Saving...
                       </span>
                     ) : (
-                      `💾 ${hasUnsavedChanges ? 'Save Changes' : 'Save Settings'}`
+                      `${hasUnsavedChanges ? 'Save Changes' : 'Save Settings'}`
                     )}
                   </button>
                 </div>
-              </div>
-              
-              <div className="mt-6 text-center">
-                <p className="text-sm text-gray-500">
-                  💡 Tip: Use the preview feature to see how your invoice will look before saving
-                </p>
               </div>
             </div>
           </div>
@@ -1366,4 +873,9 @@ export default function InvoiceSettingsPage() {
     </div>
   );
 }
+
+
+
+
+
 

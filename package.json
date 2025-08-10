@@ -13,6 +13,8 @@
     "@types/next-auth": "^3.13.0",
     "@woocommerce/woocommerce-rest-api": "^1.0.2",
     "bcryptjs": "^3.0.2",
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.536.0",
     "mongodb": "^5.9.2",
     "next": "15.4.5",

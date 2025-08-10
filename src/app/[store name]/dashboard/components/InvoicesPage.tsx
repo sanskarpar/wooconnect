@@ -13,11 +13,12 @@ import {
   TrendingUp,
   TrendingDown
 } from 'lucide-react';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { downloadInvoicePDF } from '@/lib/invoicePdfGenerator';
 
 interface Invoice {
   id: string;
   number: string;
+  universalNumber?: string; // Universal invoice number across all stores
   amount: number;
   status: 'paid' | 'unpaid' | 'overdue';
   customerName: string;
@@ -25,6 +26,14 @@ interface Invoice {
   createdAt: string;
   dueDate: string;
   orderStatus?: string;
+  customerAddress?: {
+    address_1?: string;
+    address_2?: string;
+    city?: string;
+    postcode?: string;
+    country?: string;
+    state?: string;
+  };
   items?: Array<{
     name: string;
     quantity: number;
@@ -151,6 +160,7 @@ export default function InvoicesPage({ storeName }: InvoicesPageProps) {
     .filter(invoice => 
       searchTerm === '' ||
       invoice.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (invoice.universalNumber && invoice.universalNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
       invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (invoice.customerEmail && invoice.customerEmail.toLowerCase().includes(searchTerm.toLowerCase()))
     )
@@ -159,8 +169,9 @@ export default function InvoicesPage({ storeName }: InvoicesPageProps) {
       
       switch (sortField) {
         case 'number':
-          aValue = a.number;
-          bValue = b.number;
+          // Sort by universal number if available, otherwise by regular number
+          aValue = a.universalNumber || a.number;
+          bValue = b.universalNumber || b.number;
           break;
         case 'amount':
           aValue = a.amount;
@@ -185,788 +196,14 @@ export default function InvoicesPage({ storeName }: InvoicesPageProps) {
       }
     });
 
-  // Professional UK-Style Invoice PDF Generator
+  // Professional Invoice PDF Generator using shared library
   const handleDownload = async (invoice: Invoice) => {
-    const s = settings || {
-      template: 'uk-standard',
-      logoUrl: '',
-      colorScheme: '#1f2937',
-      accentColor: '#3b82f6',
-      companyName: storeName,
-      companyRegNumber: '',
-      vatNumber: '',
-      companyAddress: '',
-      companyCity: '',
-      companyPostcode: '',
-      companyCountry: 'United Kingdom',
-      companyEmail: '',
-      companyPhone: '',
-      companyWebsite: '',
-      invoicePrefix: 'INV',
-      dueDays: 30,
-      showLogo: true,
-      logoPosition: 'left',
-      headerHeight: 140,
-      showWatermark: false,
-      watermarkText: 'INVOICE',
-      watermarkOpacity: 0.1,
-      footerText: 'Thank you for your business',
-      terms: 'Payment is due within 30 days of invoice date.',
-      bankDetails: '',
-      paymentInstructions: 'Please reference the invoice number when making payment.',
-      defaultTaxRate: 20,
-      showTaxBreakdown: true,
-      taxLabel: 'VAT',
-      currency: 'GBP',
-      currencySymbol: '£',
-      dateFormat: 'DD/MM/YYYY',
-      digitalSignature: '',
-      approvedBy: '',
-      showPaymentTerms: true,
-      language: 'en-GB',
-      fontSize: 'medium',
-      notes: ''
-    };
-
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([595, 842]); // A4 size
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
-
-    const pageWidth = 595;
-    const pageHeight = 842;
-    const margin = 40;
-    const contentWidth = pageWidth - (margin * 2);
-
-    // Helper function to convert hex to RGB
-    const hexToRgb = (hex: string) => {
-      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-      return result ? {
-        r: parseInt(result[1], 16) / 255,
-        g: parseInt(result[2], 16) / 255,
-        b: parseInt(result[3], 16) / 255
-      } : { r: 0.15, g: 0.19, b: 0.25 };
-    };
-
-    // Color definitions using settings
-    const primaryColorHex = hexToRgb(s.colorScheme);
-    const accentColorHex = hexToRgb(s.accentColor);
-    const primaryColor = rgb(primaryColorHex.r, primaryColorHex.g, primaryColorHex.b);
-    const accentColor = rgb(accentColorHex.r, accentColorHex.g, accentColorHex.b);
-    const lightAccent = rgb(0.95, 0.97, 1);
-    const darkGray = rgb(0.17, 0.17, 0.19);
-    const mediumGray = rgb(0.48, 0.48, 0.52);
-    const lightGray = rgb(0.93, 0.94, 0.96);
-    const white = rgb(1, 1, 1);
-
-    // Font sizes
-    const titleSize = 20;
-    const headerSize = 12;
-    const subHeaderSize = 10;
-    const normalSize = 9;
-    const smallSize = 8;
-
-    let yPos = pageHeight - margin;
-
-    // Header background
-    page.drawRectangle({
-      x: 0,
-      y: pageHeight - 120,
-      width: pageWidth,
-      height: 120,
-      color: primaryColor
-    });
-
-    // Blue accent stripe
-    page.drawRectangle({
-      x: 0,
-      y: pageHeight - 125,
-      width: pageWidth,
-      height: 5,
-      color: accentColor
-    });
-
-    // Logo and Company name section - left side
-    yPos = pageHeight - 20;
-    let logoWidth = 0;
-    let logoHeight = 0;
-    
-    // Embed and display logo if available and enabled
-    if (s.showLogo && s.logoUrl) {
-      try {
-        let logoImage;
-        
-        // Handle base64 encoded images
-        if (s.logoUrl.startsWith('data:')) {
-          const base64Data = s.logoUrl.split(',')[1];
-          const logoBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-          
-          // Determine image type from data URL
-          if (s.logoUrl.includes('data:image/png')) {
-            logoImage = await pdfDoc.embedPng(logoBytes);
-          } else if (s.logoUrl.includes('data:image/jpeg') || s.logoUrl.includes('data:image/jpg')) {
-            logoImage = await pdfDoc.embedJpg(logoBytes);
-          } else {
-            throw new Error('Unsupported image format. Please use PNG or JPG.');
-          }
-        } else {
-          // Handle URL-based images (with CORS handling)
-          try {
-            const logoResponse = await fetch(s.logoUrl, {
-              mode: 'cors',
-              headers: {
-                'Accept': 'image/*',
-              }
-            });
-            
-            if (!logoResponse.ok) {
-              throw new Error(`Failed to fetch logo: ${logoResponse.status}`);
-            }
-            
-            const logoArrayBuffer = await logoResponse.arrayBuffer();
-            const logoBytes = new Uint8Array(logoArrayBuffer);
-            
-            // Determine image type from URL or content type
-            const contentType = logoResponse.headers.get('content-type');
-            if (contentType?.includes('png') || s.logoUrl.toLowerCase().includes('.png')) {
-              logoImage = await pdfDoc.embedPng(logoBytes);
-            } else if (contentType?.includes('jpeg') || contentType?.includes('jpg') || 
-                      s.logoUrl.toLowerCase().includes('.jpg') || s.logoUrl.toLowerCase().includes('.jpeg')) {
-              logoImage = await pdfDoc.embedJpg(logoBytes);
-            } else {
-              throw new Error('Unsupported image format from URL');
-            }
-          } catch (fetchError) {
-            console.warn('Failed to fetch logo from URL:', fetchError);
-            throw new Error('Could not load logo from URL. Please upload a local image file.');
-          }
-        }
-        
-        // Calculate logo dimensions (max 35px height, maintain aspect ratio)
-        const logoAspectRatio = logoImage.width / logoImage.height;
-        logoHeight = Math.min(35, s.headerHeight * 0.35);
-        logoWidth = logoHeight * logoAspectRatio;
-        
-        // Ensure logo doesn't exceed reasonable width
-        const maxLogoWidth = contentWidth * 0.25;
-        if (logoWidth > maxLogoWidth) {
-          logoWidth = maxLogoWidth;
-          logoHeight = logoWidth / logoAspectRatio;
-        }
-        
-        // Position logo based on logoPosition setting
-        let logoX = margin;
-        if (s.logoPosition === 'center') {
-          logoX = (pageWidth - logoWidth) / 2;
-        } else if (s.logoPosition === 'right') {
-          logoX = pageWidth - margin - logoWidth;
-        }
-        
-        // Draw the logo
-        page.drawImage(logoImage, {
-          x: logoX,
-          y: yPos - logoHeight,
-          width: logoWidth,
-          height: logoHeight,
-        });
-        
-        // Adjust yPos for company name to be below logo with proper spacing
-        yPos -= (logoHeight + 15);
-      } catch (error) {
-        console.error('Error embedding logo:', error);
-      }
+    try {
+      await downloadInvoicePDF(invoice, settings || {}, storeName);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Error generating PDF. Please try again.');
     }
-
-    // Company name - positioned below logo or at top if no logo
-    let companyNameX = margin;
-    if (s.logoPosition === 'center') {
-      const companyNameWidth = fontBold.widthOfTextAtSize((s.companyName || storeName).toUpperCase(), titleSize);
-      companyNameX = (pageWidth - companyNameWidth) / 2;
-    } else if (s.logoPosition === 'right') {
-      const companyNameWidth = fontBold.widthOfTextAtSize((s.companyName || storeName).toUpperCase(), titleSize);
-      companyNameX = pageWidth - margin - companyNameWidth;
-    }
-
-    page.drawText((s.companyName || storeName).toUpperCase(), {
-      x: companyNameX,
-      y: yPos,
-      size: titleSize,
-      font: fontBold,
-      color: white
-    });
-
-    // Company registration info - positioned below company name
-    yPos -= 18;
-    let regInfoX = companyNameX;
-    
-    if (s.companyRegNumber) {
-      page.drawText(`Reg: ${s.companyRegNumber}`, {
-        x: regInfoX,
-        y: yPos,
-        size: smallSize,
-        font,
-        color: rgb(0.9, 0.9, 0.9)
-      });
-    }
-    if (s.vatNumber) {
-      const regText = s.companyRegNumber ? ` | VAT: ${s.vatNumber}` : `VAT: ${s.vatNumber}`;
-      const startX = s.companyRegNumber ? regInfoX + font.widthOfTextAtSize(`Reg: ${s.companyRegNumber}`, smallSize) : regInfoX;
-      page.drawText(regText, {
-        x: startX,
-        y: yPos,
-        size: smallSize,
-        font,
-        color: rgb(0.9, 0.9, 0.9)
-      });
-    }
-
-    // Invoice title and details - right side
-    const invoiceTitleX = pageWidth - margin - 140;
-    page.drawText('INVOICE', {
-      x: invoiceTitleX,
-      y: pageHeight - 35,
-      size: titleSize,
-      font: fontBold,
-      color: white
-    });
-
-    page.drawText(invoice.number, {
-      x: invoiceTitleX,
-      y: pageHeight - 55,
-      size: headerSize,
-      font: fontBold,
-      color: accentColor
-    });
-
-    // Status badge
-    let statusBg = mediumGray;
-    if (invoice.status === 'paid') statusBg = rgb(0.13, 0.69, 0.31);
-    else if (invoice.status === 'overdue') statusBg = rgb(0.86, 0.24, 0.32);
-    else if (invoice.status === 'unpaid') statusBg = rgb(0.97, 0.62, 0.13);
-
-    const statusText = invoice.status.toUpperCase();
-    const statusWidth = fontBold.widthOfTextAtSize(statusText, smallSize) + 12;
-
-    page.drawRectangle({
-      x: pageWidth - margin - statusWidth,
-      y: pageHeight - 80,
-      width: statusWidth,
-      height: 16,
-      color: statusBg
-    });
-
-    page.drawText(statusText, {
-      x: pageWidth - margin - statusWidth + 6,
-      y: pageHeight - 76,
-      size: smallSize,
-      font: fontBold,
-      color: white
-    });
-
-    // Main content starts here - adjust yPos to account for dynamic header height
-    yPos = pageHeight - Math.max(140, 80 + (s.showLogo && s.logoUrl ? 60 : 0));
-
-    // Company information - left side
-    let companyY = yPos;
-    page.drawText('From:', {
-      x: margin,
-      y: companyY,
-      size: subHeaderSize,
-      font: fontBold,
-      color: accentColor
-    });
-
-    companyY -= 18;
-    page.drawText(s.companyName || storeName, {
-      x: margin,
-      y: companyY,
-      size: subHeaderSize,
-      font: fontBold,
-      color: darkGray
-    });
-
-    // Company address
-    const addressLines = [];
-    if (s.companyAddress) addressLines.push(s.companyAddress);
-    if (s.companyCity || s.companyPostcode) {
-      const cityPostcode = [s.companyCity, s.companyPostcode].filter(Boolean).join(', ');
-      if (cityPostcode) addressLines.push(cityPostcode);
-    }
-    if (s.companyCountry) addressLines.push(s.companyCountry);
-
-    addressLines.forEach(line => {
-      companyY -= 14;
-      page.drawText(line, {
-        x: margin,
-        y: companyY,
-        size: normalSize,
-        font,
-        color: mediumGray
-      });
-    });
-
-    if (s.companyEmail) {
-      companyY -= 14;
-      page.drawText(`${s.companyEmail}`, {
-        x: margin,
-        y: companyY,
-        size: normalSize,
-        font,
-        color: mediumGray
-      });
-    }
-
-    if (s.companyPhone) {
-      companyY -= 14;
-      page.drawText(`${s.companyPhone}`, {
-        x: margin,
-        y: companyY,
-        size: normalSize,
-        font,
-        color: mediumGray
-      });
-    }
-
-    // Bill To section - center column
-    const billToX = margin + 200;
-    let billToY = yPos;
-
-    page.drawText('Bill To:', {
-      x: billToX,
-      y: billToY,
-      size: subHeaderSize,
-      font: fontBold,
-      color: accentColor
-    });
-
-    billToY -= 18;
-    page.drawText(invoice.customerName, {
-      x: billToX,
-      y: billToY,
-      size: subHeaderSize,
-      font: fontBold,
-      color: darkGray
-    });
-
-    if (invoice.customerEmail) {
-      billToY -= 14;
-      page.drawText(invoice.customerEmail, {
-        x: billToX,
-        y: billToY,
-        size: normalSize,
-        font,
-        color: mediumGray
-      });
-    }
-
-    // Items table
-    yPos -= 120;
-
-    // Table header
-    const tableY = yPos;
-    const rowHeight = 25;
-
-    page.drawRectangle({
-      x: margin,
-      y: tableY - rowHeight,
-      width: contentWidth,
-      height: rowHeight,
-      color: primaryColor
-    });
-
-    // Column definitions with proper widths that fit the page
-    const columns = [
-      { label: 'Description', x: margin + 8, width: 240 },
-      { label: 'Qty', x: margin + 258, width: 40 },
-      { label: 'Rate', x: margin + 308, width: 60 },
-      { label: s.taxLabel || 'VAT', x: margin + 378, width: 40 },
-      { label: 'Amount', x: margin + 428, width: 85 }
-    ];
-
-    // Draw table headers
-    columns.forEach(col => {
-      if (col.label === 'Amount') {
-        // Right-align the Amount header
-        page.drawText(col.label, {
-          x: col.x + col.width - font.widthOfTextAtSize(col.label, normalSize),
-          y: tableY - 15,
-          size: normalSize,
-          font: fontBold,
-          color: white
-        });
-      } else if (col.label === 'Qty' || col.label === (s.taxLabel || 'VAT')) {
-        // Center-align Qty and VAT headers
-        page.drawText(col.label, {
-          x: col.x + (col.width - font.widthOfTextAtSize(col.label, normalSize)) / 2,
-          y: tableY - 15,
-          size: normalSize,
-          font: fontBold,
-          color: white
-        });
-      } else {
-        // Left-align other headers
-        page.drawText(col.label, {
-          x: col.x,
-          y: tableY - 15,
-          size: normalSize,
-          font: fontBold,
-          color: white
-        });
-      }
-    });
-
-    let currentY = tableY - rowHeight;
-
-    // Calculate totals with proper VAT handling
-    let subtotal = 0;
-    let totalVat = 0;
-    const vatRate = (s.defaultTaxRate || 20) / 100;
-
-    // Table rows
-    if (invoice.items && invoice.items.length > 0) {
-      invoice.items.forEach((item, index) => {
-        const itemTotal = item.quantity * item.price;
-        const itemVat = s.showTaxBreakdown ? itemTotal * vatRate : 0;
-        subtotal += itemTotal;
-        totalVat += itemVat;
-
-        // Row background
-        page.drawRectangle({
-          x: margin,
-          y: currentY - rowHeight,
-          width: contentWidth,
-          height: rowHeight,
-          color: index % 2 === 0 ? white : lightAccent,
-          borderColor: lightGray,
-          borderWidth: 0.5
-        });
-
-        // Truncate description if too long
-        let description = item.name;
-        const maxDescWidth = 220;
-        while (font.widthOfTextAtSize(description, normalSize) > maxDescWidth && description.length > 10) {
-          description = description.substring(0, description.length - 4) + '...';
-        }
-
-        // Draw cell contents with proper alignment
-        page.drawText(description, {
-          x: columns[0].x,
-          y: currentY - 15,
-          size: normalSize,
-          font,
-          color: darkGray
-        });
-
-        const qtyText = item.quantity.toString();
-        page.drawText(qtyText, {
-          x: columns[1].x + (columns[1].width - font.widthOfTextAtSize(qtyText, normalSize)) / 2,
-          y: currentY - 15,
-          size: normalSize,
-          font,
-          color: darkGray
-        });
-
-        page.drawText(`${s.currencySymbol || '£'}${item.price.toFixed(2)}`, {
-          x: columns[2].x,
-          y: currentY - 15,
-          size: normalSize,
-          font,
-          color: darkGray
-        });
-
-        const vatText = s.showTaxBreakdown ? `${(s.defaultTaxRate || 20).toFixed(1)}%` : '-';
-        page.drawText(vatText, {
-          x: columns[3].x + (columns[3].width - font.widthOfTextAtSize(vatText, normalSize)) / 2,
-          y: currentY - 15,
-          size: normalSize,
-          font,
-          color: darkGray
-        });
-
-        const amountText = `${s.currencySymbol || '£'}${itemTotal.toFixed(2)}`;
-        page.drawText(amountText, {
-          x: columns[4].x + columns[4].width - font.widthOfTextAtSize(amountText, normalSize),
-          y: currentY - 15,
-          size: normalSize,
-          font: fontBold,
-          color: darkGray
-        });
-
-        currentY -= rowHeight;
-      });
-    } else {
-      // No items message
-      page.drawRectangle({
-        x: margin,
-        y: currentY - rowHeight,
-        width: contentWidth,
-        height: rowHeight,
-        color: lightAccent
-      });
-
-      page.drawText('No items specified for this invoice.', {
-        x: margin + contentWidth / 2 - font.widthOfTextAtSize('No items specified for this invoice.', normalSize) / 2,
-        y: currentY - 15,
-        size: normalSize,
-        font: fontItalic,
-        color: mediumGray
-      });
-      currentY -= rowHeight;
-    }
-
-    // Totals section with proper alignment
-    currentY -= 30;
-    const totalsX = margin + 350; // Move totals section to ensure it fits
-    const totalsValueX = totalsX + 120; // Fixed position for values
-
-    if (s.showTaxBreakdown && subtotal > 0) {
-      // Subtotal
-      page.drawText('Subtotal:', {
-        x: totalsX,
-        y: currentY,
-        size: normalSize,
-        font,
-        color: darkGray
-      });
-      
-      const subtotalText = `${s.currencySymbol || '£'}${subtotal.toFixed(2)}`;
-      page.drawText(subtotalText, {
-        x: totalsValueX + 60 - font.widthOfTextAtSize(subtotalText, normalSize),
-        y: currentY,
-        size: normalSize,
-        font,
-        color: darkGray
-      });
-      currentY -= 18;
-
-      // VAT with proper label and percentage
-      page.drawText(`${s.taxLabel || 'VAT'} (${(s.defaultTaxRate || 20).toFixed(1)}%):`, {
-        x: totalsX,
-        y: currentY,
-        size: normalSize,
-        font,
-        color: darkGray
-      });
-      
-      const vatText = `${s.currencySymbol || '£'}${totalVat.toFixed(2)}`;
-      page.drawText(vatText, {
-        x: totalsValueX + 60 - font.widthOfTextAtSize(vatText, normalSize),
-        y: currentY,
-        size: normalSize,
-        font,
-        color: darkGray
-      });
-      currentY -= 25;
-    }
-
-    // Total line
-    page.drawLine({
-      start: { x: totalsX, y: currentY + 8 },
-      end: { x: totalsValueX + 60, y: currentY + 8 },
-      thickness: 2,
-      color: accentColor
-    });
-
-    page.drawText('TOTAL:', {
-      x: totalsX,
-      y: currentY - 10,
-      size: headerSize,
-      font: fontBold,
-      color: accentColor
-    });
-
-    const finalTotal = s.showTaxBreakdown && subtotal > 0 ? subtotal + totalVat : invoice.amount;
-    const totalText = `${s.currencySymbol || '£'}${finalTotal.toFixed(2)}`;
-    page.drawText(totalText, {
-      x: totalsValueX + 60 - fontBold.widthOfTextAtSize(totalText, headerSize),
-      y: currentY - 10,
-      size: headerSize,
-      font: fontBold,
-      color: accentColor
-    });
-
-    // Content sections (only add if they have meaningful content)
-    let hasContentBelow = false;
-    let contentStartY = currentY - 50;
-    let currentContentY = contentStartY;
-
-    // Payment instructions (only if not empty and meaningful)
-    if (s.paymentInstructions && s.paymentInstructions.trim() && 
-        s.paymentInstructions.trim() !== 'Please reference the invoice number when making payment.' &&
-        s.paymentInstructions.trim().toLowerCase() !== 'none' &&
-        s.paymentInstructions.trim().toLowerCase() !== 'n/a' &&
-        s.paymentInstructions.trim().toLowerCase() !== '-') {
-      hasContentBelow = true;
-      page.drawText('Payment Instructions:', {
-        x: margin,
-        y: currentContentY,
-        size: subHeaderSize,
-        font: fontBold,
-        color: accentColor
-      });
-      currentContentY -= 18;
-
-      const instructions = s.paymentInstructions.split('\n');
-      instructions.slice(0, 2).forEach(line => {
-        if (line.trim()) {
-          page.drawText(line.trim(), {
-            x: margin,
-            y: currentContentY,
-            size: normalSize,
-            font,
-            color: darkGray
-          });
-          currentContentY -= 14;
-        }
-      });
-      currentContentY -= 10; // Extra spacing after section
-    }
-
-    // Terms (only if not empty and meaningful)
-    if (s.terms && s.terms.trim() && 
-        s.terms.trim() !== 'Payment is due within 30 days of invoice date.' &&
-        s.terms.trim().toLowerCase() !== 'yes' &&
-        s.terms.trim().toLowerCase() !== 'none' &&
-        s.terms.trim().toLowerCase() !== 'n/a' &&
-        s.terms.trim().toLowerCase() !== '-') {
-      hasContentBelow = true;
-      page.drawText('Terms:', {
-        x: margin,
-        y: currentContentY,
-        size: subHeaderSize,
-        font: fontBold,
-        color: accentColor
-      });
-      currentContentY -= 18;
-
-      page.drawText(s.terms.trim(), {
-        x: margin,
-        y: currentContentY,
-        size: smallSize,
-        font,
-        color: mediumGray
-      });
-      currentContentY -= 20; // Extra spacing after section
-    }
-
-    // Bank details (only if not empty and meaningful)
-    if (s.bankDetails && s.bankDetails.trim() && 
-        s.bankDetails.trim().toLowerCase() !== 'none' &&
-        s.bankDetails.trim().toLowerCase() !== 'n/a' &&
-        s.bankDetails.trim().toLowerCase() !== '-') {
-      hasContentBelow = true;
-      page.drawText('Bank Details:', {
-        x: margin,
-        y: currentContentY,
-        size: subHeaderSize,
-        font: fontBold,
-        color: accentColor
-      });
-      currentContentY -= 18;
-
-      const bankLines = s.bankDetails.split('\n');
-      bankLines.slice(0, 3).forEach(line => {
-        if (line.trim()) {
-          page.drawText(line.trim(), {
-            x: margin,
-            y: currentContentY,
-            size: normalSize,
-            font,
-            color: darkGray
-          });
-          currentContentY -= 14;
-        }
-      });
-      currentContentY -= 10; // Extra spacing after section
-    }
-
-    // Digital signature at the bottom (only if not empty and it's actual text, not a blob URL)
-    let footerY: number;
-    if (hasContentBelow) {
-      footerY = Math.max(currentContentY - 20, 120); // Reduced gap when content exists
-    } else {
-      footerY = Math.max(currentY - 40, 120); // Move footer closer to totals when no content
-    }
-    
-    if (s.digitalSignature && s.digitalSignature.trim() && 
-        !s.digitalSignature.startsWith('blob:') &&
-        s.digitalSignature.trim().toLowerCase() !== 'none' &&
-        s.digitalSignature.trim().toLowerCase() !== 'n/a' &&
-        s.digitalSignature.trim().toLowerCase() !== '-') {
-      page.drawText('Authorized Signature:', {
-        x: pageWidth - margin - 200,
-        y: footerY,
-        size: smallSize,
-        font: fontBold,
-        color: mediumGray
-      });
-      
-      // Handle multi-line signatures
-      const signatureLines = s.digitalSignature.trim().split('\n');
-      signatureLines.slice(0, 2).forEach((line, index) => {
-        if (line.trim()) {
-          page.drawText(line.trim(), {
-            x: pageWidth - margin - 200,
-            y: footerY - 15 - (index * 12),
-            size: normalSize,
-            font: fontItalic,
-            color: accentColor
-          });
-        }
-      });
-      
-      // Signature line
-      page.drawLine({
-        start: { x: pageWidth - margin - 200, y: footerY - 35 },
-        end: { x: pageWidth - margin - 50, y: footerY - 35 },
-        thickness: 1,
-        color: mediumGray
-      });
-      
-      footerY -= 45; // Adjust footer position
-    }
-
-    // Ensure footer doesn't go below minimum position but eliminate excessive space
-    footerY = Math.max(footerY, 80);
-
-    // Footer
-    page.drawLine({
-      start: { x: margin, y: footerY },
-      end: { x: pageWidth - margin, y: footerY },
-      thickness: 1,
-      color: lightGray
-    });
-
-    page.drawText(`${s.companyName || storeName}`, {
-      x: margin,
-      y: footerY - 15,
-      size: smallSize,
-      font: fontBold,
-      color: mediumGray
-    });
-
-    if (s.companyWebsite && s.companyWebsite.trim()) {
-      page.drawText(s.companyWebsite, {
-        x: pageWidth - margin - font.widthOfTextAtSize(s.companyWebsite, smallSize),
-        y: footerY - 15,
-        size: smallSize,
-        font,
-        color: mediumGray
-      });
-    }
-
-    // Generate and download PDF
-    const pdfBytes = await pdfDoc.save();
-    const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${s.companyName || storeName}-Invoice-${invoice.number}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   const handleSort = (field: 'number' | 'amount' | 'createdAt' | 'dueDate') => {
@@ -1152,7 +389,7 @@ export default function InvoicesPage({ storeName }: InvoicesPageProps) {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search invoices, customers..."
+                placeholder="Search invoices, universal numbers, customers..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -1185,6 +422,7 @@ export default function InvoicesPage({ storeName }: InvoicesPageProps) {
                 >
                   <div className="flex items-center gap-2">
                     Invoice Number
+                    <span className="text-xs text-gray-400 font-normal normal-case">(Universal #)</span>
                     <div className="flex flex-col">
                       <div className={`w-0 h-0 border-l-2 border-r-2 border-transparent border-b-2 ${
                         sortField === 'number' && sortDirection === 'asc' ? 'border-b-blue-500' : 'border-b-gray-300'
@@ -1254,7 +492,16 @@ export default function InvoicesPage({ storeName }: InvoicesPageProps) {
                         </div>
                       </div>
                       <div className="ml-4 min-w-0 flex-1">
-                        <div className="text-sm font-medium text-gray-900 truncate">{invoice.number}</div>
+                        <div className="text-sm font-medium text-gray-900 truncate">
+                          {invoice.universalNumber ? (
+                            <div>
+                              <div className="text-blue-600 font-semibold">#{invoice.universalNumber}</div>
+                              <div className="text-xs text-gray-500">Store: {invoice.number}</div>
+                            </div>
+                          ) : (
+                            invoice.number
+                          )}
+                        </div>
                         <div className="text-sm text-gray-500 flex items-center gap-1">
                           <Calendar className="h-3 w-3 flex-shrink-0" />
                           <span className="truncate">Created {formatDate(invoice.createdAt)}</span>

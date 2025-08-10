@@ -3,6 +3,7 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 export interface InvoiceData {
   id: string;
   number: string;
+  universalNumber?: string; // Universal invoice number across all stores
   amount: number;
   status: 'paid' | 'unpaid' | 'overdue';
   customerName: string;
@@ -10,6 +11,15 @@ export interface InvoiceData {
   createdAt: string;
   dueDate: string;
   orderStatus?: string;
+  paymentMethod?: string;
+  customerAddress?: {
+    address_1?: string;
+    address_2?: string;
+    city?: string;
+    postcode?: string;
+    country?: string;
+    state?: string;
+  };
   items?: Array<{
     name: string;
     quantity: number;
@@ -19,7 +29,6 @@ export interface InvoiceData {
 
 export interface InvoiceSettings {
   // Basic Info
-  template: string;
   logoUrl: string;
   colorScheme: string;
   accentColor: string;
@@ -42,8 +51,6 @@ export interface InvoiceSettings {
   dueDays: number;
   lateFeePercentage: number;
   discountType: 'percentage' | 'fixed';
-  showQrCode: boolean;
-  showBarcode: boolean;
   
   // Layout & Styling
   fontSize: 'small' | 'medium' | 'large';
@@ -92,246 +99,554 @@ export const generateProfessionalUKInvoicePDF = async (
   settings: Partial<InvoiceSettings>,
   storeName?: string
 ): Promise<Uint8Array> => {
-  // Default professional UK settings
+  // Default German invoice settings matching the actual settings interface
   const s: InvoiceSettings = {
-    template: 'uk-standard',
+    // Basic Info
     logoUrl: '',
-    colorScheme: '#1f2937',
-    accentColor: '#3b82f6',
-    companyName: storeName || 'Your Company',
-    companyRegNumber: '',
-    vatNumber: '',
-    companyAddress: '',
-    companyCity: '',
-    companyPostcode: '',
-    companyCountry: 'United Kingdom',
-    companyEmail: '',
-    companyPhone: '',
-    companyWebsite: '',
-    invoicePrefix: 'INV',
-    invoiceNumberFormat: 'INV-{YYYY}{MM}{DD}-{###}',
-    dueDays: 30,
-    lateFeePercentage: 2.5,
-    discountType: 'percentage',
-    showQrCode: true,
-    showBarcode: false,
-    fontSize: 'medium',
-    showLogo: true,
+    colorScheme: settings.colorScheme || '#000000',
+    accentColor: settings.accentColor || '#000000',
+    
+    // Company Details
+    companyName: settings.companyName || storeName || 'Max Mustermann',
+    companyRegNumber: settings.companyRegNumber || '',
+    vatNumber: settings.vatNumber || '122173244432',
+    companyAddress: settings.companyAddress || 'Straße 232',
+    companyCity: settings.companyCity || 'Berlin',
+    companyPostcode: settings.companyPostcode || '10115',
+    companyCountry: settings.companyCountry || '',
+    companyEmail: settings.companyEmail || '',
+    companyPhone: settings.companyPhone || '',
+    companyWebsite: settings.companyWebsite || '',
+    
+    // Invoice Configuration
+    invoicePrefix: settings.invoicePrefix || '',
+    invoiceNumberFormat: settings.invoiceNumberFormat || '{YYYY} - {###}',
+    dueDays: settings.dueDays || 30,
+    lateFeePercentage: settings.lateFeePercentage || 0,
+    discountType: settings.discountType || 'percentage',
+    
+    // Layout & Styling
+    fontSize: settings.fontSize || 'medium',
+    showLogo: false,
     logoPosition: 'left',
-    headerHeight: 140,
+    headerHeight: 50,
     showWatermark: false,
-    watermarkText: 'INVOICE',
-    watermarkOpacity: 0.1,
-    footerText: 'Thank you for your business!',
-    terms: 'Payment is due within 30 days of invoice date. Late payments may incur additional charges.',
+    watermarkText: '',
+    watermarkOpacity: 0,
+    
+    // Content
+    footerText: '',
+    terms: '',
     privacyPolicy: '',
     bankDetails: '',
-    paymentInstructions: 'Please reference the invoice number when making payment.',
-    defaultTaxRate: 20,
-    showTaxBreakdown: true,
-    taxLabel: 'VAT',
-    currency: 'GBP',
-    currencySymbol: '£',
-    dateFormat: 'DD/MM/YYYY',
-    numberFormat: 'UK',
-    purchaseOrderRef: true,
+    paymentInstructions: '',
+    
+    // Tax Settings
+    defaultTaxRate: settings.defaultTaxRate || 0,
+    showTaxBreakdown: false,
+    taxLabel: 'MwSt.',
+    
+    // Currency & Formatting
+    currency: settings.currency || 'EUR',
+    currencySymbol: settings.currencySymbol || '€',
+    dateFormat: 'DD.MM.YYYY',
+    numberFormat: 'DE',
+    
+    // Additional Fields
+    purchaseOrderRef: false,
     projectRef: false,
-    deliveryDate: false,
+    deliveryDate: true,
     notes: '',
-    digitalSignature: '',
-    approvedBy: '',
-    invoiceStatus: true,
-    showPaymentTerms: true,
+    
+    // Professional Features
+    digitalSignature: settings.digitalSignature || '',
+    approvedBy: settings.approvedBy || '',
+    invoiceStatus: false,
+    showPaymentTerms: false,
     multiLanguage: false,
-    language: 'en-GB',
-    ...settings
+    language: 'de-DE'
   };
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([595, 842]); // A4 size
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
   
   const pageWidth = 595;
   const pageHeight = 842;
   const margin = 40;
   const contentWidth = pageWidth - (margin * 2);
   
-  // Professional UK Color Palette
-  const primaryColor = rgb(0.12, 0.16, 0.22); // #1f2937 - Dark slate
-  const accentColor = rgb(0.23, 0.51, 0.96); // #3b82f6 - Professional blue
-  const lightAccent = rgb(0.93, 0.96, 1); // #eef2ff - Light blue
-  const darkGray = rgb(0.11, 0.11, 0.13); // #1c1c21
-  const mediumGray = rgb(0.4, 0.4, 0.45); // #666672
-  const lightGray = rgb(0.93, 0.94, 0.96); // #f1f2f4
-  const successGreen = rgb(0.05, 0.69, 0.27); // #0db14b
-  const warningOrange = rgb(0.96, 0.55, 0.02); // #f59e0b
-  const dangerRed = rgb(0.86, 0.15, 0.27); // #dc2626
-
-  let yPos = pageHeight - margin;
-
-  // Watermark (if enabled)
-  if (s.showWatermark) {
-    page.drawText(s.watermarkText || 'INVOICE', {
-      x: pageWidth / 2 - 80,
-      y: pageHeight / 2,
-      size: 120,
-      font: fontBold,
-      color: rgb(0.95, 0.95, 0.95),
-      opacity: s.watermarkOpacity || 0.1
-    });
-  }
-
-  // Professional Header with UK styling
-  const headerHeight = s.headerHeight || 140;
+  // Parse color scheme and accent colors from settings
+  const parseColor = (colorHex: string) => {
+    const hex = colorHex.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16) / 255;
+    const g = parseInt(hex.substr(2, 2), 16) / 255;
+    const b = parseInt(hex.substr(4, 2), 16) / 255;
+    return rgb(r, g, b);
+  };
   
-  // Header background
-  page.drawRectangle({
-    x: 0,
-    y: pageHeight - headerHeight,
-    width: pageWidth,
-    height: headerHeight,
+  const primaryColor = parseColor(s.colorScheme);
+  const accentColor = parseColor(s.accentColor);
+  const black = rgb(0, 0, 0);
+  const lightGray = rgb(0.93, 0.94, 0.96);
+  
+  // Font sizes based on settings
+  // Increase font sizes for better readability
+  const fontSizes = {
+    small: { title: 18, subtitle: 13, normal: 10, small: 9 },
+    medium: { title: 20, subtitle: 15, normal: 12, small: 11 },
+    large: { title: 24, subtitle: 18, normal: 15, small: 13 }
+  };
+  const sizes = fontSizes[s.fontSize];
+  
+  let yPos = pageHeight - margin - 50;
+
+  // Invoice title with custom color
+  const titleText = 'Rechnung';
+  
+  page.drawText(titleText, {
+    x: margin,
+    y: yPos,
+    size: sizes.title,
+    font: fontBold,
     color: primaryColor
   });
 
-  // Add subtle accent line
-  page.drawRectangle({
-    x: 0,
-    y: pageHeight - headerHeight,
-    width: pageWidth,
-    height: 4,
-    color: accentColor
-  });
-
-  yPos = pageHeight - 25;
-
-  // Logo placement (if available)
-  let logoWidth = 0;
-  if (s.showLogo && s.logoUrl) {
-    try {
-      const imgBytes = await fetch(s.logoUrl).then(r => r.arrayBuffer());
-      const img = await pdfDoc.embedPng(imgBytes);
-      const logoSize = 60;
-      logoWidth = logoSize + 20;
-      
-      const logoX = s.logoPosition === 'right' ? pageWidth - margin - logoSize :
-                   s.logoPosition === 'center' ? (pageWidth - logoSize) / 2 :
-                   margin;
-      
-      page.drawImage(img, {
-        x: logoX,
-        y: pageHeight - 90,
-        width: logoSize,
-        height: logoSize,
-      });
-    } catch (error) {
-      console.error('Error loading logo:', error);
-    }
-  }
-
-  // Company Information
-  const companyStartX = s.logoPosition === 'left' ? margin + logoWidth : margin;
-  yPos = pageHeight - 35;
-
-  page.drawText((s.companyName || 'Your Company').toUpperCase(), {
-    x: companyStartX,
+  // Invoice number and dates
+  yPos -= 30;
+  // Draw invoice number directly - use universal number if available, fallback to regular number
+  const invoiceDisplayNumber = invoice.universalNumber || invoice.number;
+  page.drawText(invoiceDisplayNumber, {
+    x: margin,
     y: yPos,
-    size: 22,
+    size: sizes.subtitle,
     font: fontBold,
-    color: rgb(1, 1, 1)
-  });
-
-  yPos -= 16;
-  if (s.companyRegNumber) {
-    page.drawText(`Company Registration: ${s.companyRegNumber}`, {
-      x: companyStartX,
-      y: yPos,
-      size: 9,
-      font,
-      color: rgb(0.9, 0.9, 0.9)
-    });
-    yPos -= 12;
-  }
-
-  if (s.vatNumber) {
-    page.drawText(`VAT Registration: ${s.vatNumber}`, {
-      x: companyStartX,
-      y: yPos,
-      size: 9,
-      font,
-      color: rgb(0.9, 0.9, 0.9)
-    });
-  }
-
-  // Invoice Title and Number (Right side)
-  page.drawText('INVOICE', {
-    x: pageWidth - margin - 100,
-    y: pageHeight - 45,
-    size: 28,
-    font: fontBold,
-    color: rgb(1, 1, 1)
-  });
-
-  // Invoice number background
-  page.drawRectangle({
-    x: pageWidth - margin - 140,
-    y: pageHeight - 80,
-    width: 140,
-    height: 20,
     color: accentColor
   });
+  yPos -= 20;
+  
+  // Format dates based on settings
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    if (s.dateFormat === 'MM/DD/YYYY') {
+      return date.toLocaleDateString('en-US');
+    } else if (s.dateFormat === 'YYYY-MM-DD') {
+      return date.toISOString().split('T')[0];
+    } else {
+      return date.toLocaleDateString('de-DE');
+    }
+  };
 
-  page.drawText(invoice.number, {
-    x: pageWidth - margin - 135,
-    y: pageHeight - 76,
-    size: 12,
-    font: fontBold,
-    color: rgb(1, 1, 1)
+  const invoiceDate = formatDate(invoice.createdAt);
+  
+  page.drawText(`Rechnungsdatum: ${invoiceDate}`, {
+    x: margin,
+    y: yPos,
+    size: sizes.normal,
+    font,
+    color: black
   });
 
-  // Invoice Status Badge
-  let statusColor = mediumGray;
-  let statusBg = lightGray;
-  if (invoice.status === 'paid') {
-    statusColor = rgb(1, 1, 1);
-    statusBg = successGreen;
-  } else if (invoice.status === 'overdue') {
-    statusColor = rgb(1, 1, 1);
-    statusBg = dangerRed;
-  } else if (invoice.status === 'unpaid') {
-    statusColor = rgb(1, 1, 1);
-    statusBg = warningOrange;
+  yPos -= 15;
+  
+  // Delivery date
+  page.drawText(`Lieferdatum: ${invoiceDate}`, {
+    x: margin,
+    y: yPos,
+    size: sizes.normal,
+    font,
+    color: black
+  });
+  yPos -= 15;
+  
+  // Payment method
+  // Use real payment method if available
+
+  // Billing Addresses Section
+  yPos -= 40;
+  
+  // Seller address (left side)
+  
+  // Company email
+
+  // Store current Y position for buyer section
+  // Horizontal alignment for Verkäufer and Käufer
+  const addressY = yPos;
+  const buyerX = margin + 280;
+  let sellerY = addressY;
+  let buyerY = addressY;
+
+  // Verkäufer
+  page.drawText('Verkäufer:', {
+    x: margin,
+    y: sellerY,
+    size: sizes.normal,
+    font: fontBold,
+    color: black
+  });
+  sellerY -= 15;
+  if (s.companyName) {
+    page.drawText(s.companyName, {
+      x: margin,
+      y: sellerY,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    sellerY -= 12;
+  }
+  if (s.companyAddress) {
+    page.drawText(s.companyAddress, {
+      x: margin,
+      y: sellerY,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    sellerY -= 12;
+  }
+  if (s.companyPostcode && s.companyCity) {
+    page.drawText(`${s.companyPostcode} ${s.companyCity}`, {
+      x: margin,
+      y: sellerY,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    sellerY -= 12;
+  }
+  if (s.companyCountry) {
+    page.drawText(s.companyCountry, {
+      x: margin,
+      y: sellerY,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    sellerY -= 12;
   }
 
-  page.drawRectangle({
-    x: pageWidth - margin - 140,
-    y: pageHeight - 105,
-    width: 70,
-    height: 18,
-    color: statusBg
-  });
-
-  page.drawText(invoice.status.toUpperCase(), {
-    x: pageWidth - margin - 135,
-    y: pageHeight - 101,
-    size: 9,
+  // Käufer
+  page.drawText('Käufer:', {
+    x: buyerX,
+    y: buyerY,
+    size: sizes.normal,
     font: fontBold,
-    color: statusColor
+    color: black
   });
+  buyerY -= 15;
+  page.drawText(invoice.customerName || 'Guest Customer', {
+    x: buyerX,
+    y: buyerY,
+    size: sizes.normal,
+    font,
+    color: black
+  });
+  buyerY -= 12;
+  
+  // Customer Address Line 1
+  if (invoice.customerAddress?.address_1) {
+    page.drawText(invoice.customerAddress.address_1, {
+      x: buyerX,
+      y: buyerY,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    buyerY -= 12;
+  }
+  
+  // Customer Address Line 2 (if exists)
+  if (invoice.customerAddress?.address_2) {
+    page.drawText(invoice.customerAddress.address_2, {
+      x: buyerX,
+      y: buyerY,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    buyerY -= 12;
+  }
+  
+  // City, Postcode, State, Country
+  const cityLine = [];
+  if (invoice.customerAddress?.postcode) cityLine.push(invoice.customerAddress.postcode);
+  if (invoice.customerAddress?.city) cityLine.push(invoice.customerAddress.city);
+  if (invoice.customerAddress?.state) cityLine.push(invoice.customerAddress.state);
+  if (invoice.customerAddress?.country) cityLine.push(invoice.customerAddress.country);
+  
+  if (cityLine.length > 0) {
+    page.drawText(cityLine.join(', '), {
+      x: buyerX,
+      y: buyerY,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    buyerY -= 12;
+  } else {
+    // Fallback to default address if no customer address is available
+    page.drawText('Mühlbaurstr. 7', {
+      x: buyerX,
+      y: buyerY,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    buyerY -= 12;
+    page.drawText('81677 München, DE', {
+      x: buyerX,
+      y: buyerY,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    buyerY -= 12;
+  }
+  
+  if (invoice.customerEmail) {
+    page.drawText(invoice.customerEmail, {
+      x: buyerX,
+      y: buyerY,
+      size: sizes.small,
+      font,
+      color: black
+    });
+  }
 
-  // Continue with rest of the invoice layout...
-  // (The rest of the implementation would follow the same pattern as in the component)
+  // Reset yPos to continue after addresses
+  yPos = Math.min(sellerY, buyerY) - 20;
 
-  // Professional border
+  // Items Table
+  yPos -= 40;
+  
+  // Table header
+  const tableY = yPos;
+  const rowHeight = 25;
+  
+  // Table header background using accent color
   page.drawRectangle({
-    x: 8,
-    y: 8,
-    width: pageWidth - 16,
-    height: pageHeight - 16,
-    borderWidth: 1,
-    borderColor: lightGray
+    x: margin,
+    y: tableY - rowHeight,
+    width: contentWidth,
+    height: rowHeight,
+    color: lightGray
   });
+
+  // Column definitions with German headers
+  const columns = [
+    { label: 'Pos', x: margin + 5, width: 30 },
+    { label: 'Artikel', x: margin + 40, width: 250 },
+    { label: 'Anzahl', x: margin + 300, width: 50 },
+    { label: 'Preis', x: margin + 360, width: 60 },
+    { label: 'Summe', x: margin + 430, width: 80 }
+  ];
+
+  // Draw table headers
+  columns.forEach(col => {
+    page.drawText(col.label, {
+      x: col.x,
+      y: tableY - 14,
+      size: sizes.normal,
+      font: fontBold,
+      color: primaryColor
+    });
+  });
+
+  let currentY = tableY - rowHeight;
+  let subtotal = 0;
+  let totalTax = 0;
+
+  // Table rows
+  if (invoice.items && invoice.items.length > 0) {
+    invoice.items.forEach((item, index) => {
+      currentY -= rowHeight;
+      const lineTotal = item.quantity * item.price;
+      subtotal += lineTotal;
+
+      // Position
+      page.drawText((index + 1).toString(), {
+        x: columns[0].x,
+        y: currentY + 8,
+        size: sizes.small,
+        font,
+        color: black
+      });
+
+      // Article
+      const articleName = item.name.length > 35 ? item.name.substring(0, 35) + '...' : item.name;
+      page.drawText(articleName, {
+        x: columns[1].x,
+        y: currentY + 8,
+        size: sizes.small,
+        font,
+        color: black
+      });
+
+      // Quantity
+      page.drawText(item.quantity.toString(), {
+        x: columns[2].x,
+        y: currentY + 8,
+        size: sizes.small,
+        font,
+        color: black
+      });
+
+      // Unit Price with currency formatting
+      page.drawText(`${item.price.toFixed(2).replace('.', ',')} ${s.currencySymbol}`, {
+        x: columns[3].x,
+        y: currentY + 8,
+        size: sizes.small,
+        font,
+        color: black
+      });
+
+      // Line Total with currency formatting
+      page.drawText(`${lineTotal.toFixed(2).replace('.', ',')} ${s.currencySymbol}`, {
+        x: columns[4].x,
+        y: currentY + 8,
+        size: sizes.small,
+        font,
+        color: black
+      });
+    });
+  }
+
+  // Totals Section
+  currentY -= 50; // More space before totals
+  const totalsX = margin + 350;
+
+  // Subtotal
+  page.drawText('Zwischensumme:', {
+    x: totalsX,
+    y: currentY,
+    size: sizes.normal,
+    font,
+    color: black
+  });
+
+  page.drawText(`${subtotal.toFixed(2).replace('.', ',')} ${s.currencySymbol}`, {
+    x: totalsX + 100,
+    y: currentY,
+    size: sizes.normal,
+    font,
+    color: black
+  });
+
+  currentY -= sizes.normal + 10; // Space after subtotal
+
+  // Tax line
+  const taxAmount = s.defaultTaxRate > 0 ? subtotal * (s.defaultTaxRate / 100) : 0;
+  page.drawText(`${s.taxLabel || 'MwSt.'} (${s.defaultTaxRate}%)`, {
+    x: totalsX,
+    y: currentY,
+    size: sizes.normal,
+    font,
+    color: black
+  });
+
+  page.drawText(`${taxAmount.toFixed(2).replace('.', ',')} ${s.currencySymbol}`, {
+    x: totalsX + 100,
+    y: currentY,
+    size: sizes.normal,
+    font,
+    color: black
+  });
+
+  currentY -= sizes.subtitle + 10; // Space before grand total
+
+  // Grand total includes tax
+  const grandTotal = subtotal + taxAmount;
+
+  page.drawText('Gesamtsumme:', {
+    x: totalsX,
+    y: currentY,
+    size: sizes.normal,
+    font: fontBold,
+    color: primaryColor
+  });
+
+  page.drawText(`${grandTotal.toFixed(2).replace('.', ',')} ${s.currencySymbol}`, {
+    x: totalsX + 100,
+    y: currentY,
+    size: sizes.normal,
+    font: fontBold,
+    color: primaryColor
+  });
+
+  // Footer and Tax Information
+  currentY -= 60;
+  
+  // Only show the actual tax number (Steuernummer)
+  if (s.vatNumber) {
+    page.drawText(`Steuernummer: ${s.vatNumber}`, {
+      x: margin,
+      y: currentY,
+      size: sizes.small,
+      font,
+      color: black
+    });
+    currentY -= 15;
+  }
+
+  // Digital signature if provided
+  // Removed digital signature and 'Genehmigt von' rendering as requested
+
+  // Authorized by if different from digital signature
+  if (s.approvedBy && s.approvedBy !== s.digitalSignature) {
+    currentY -= 20;
+    page.drawText('Autorisiert von:', {
+      x: margin,
+      y: currentY,
+      size: sizes.small,
+      font,
+      color: black
+    });
+    currentY -= 15;
+    
+    page.drawText(s.approvedBy, {
+      x: margin,
+      y: currentY,
+      size: sizes.normal,
+      font: fontBold,
+      color: primaryColor
+    });
+  }
+
+  // Footer: center-aligned, visually appealing
+  let footerY = 40;
+  let footerText = '';
+  if (s.companyEmail) {
+    footerText += s.companyEmail;
+  }
+  if (s.companyPhone) {
+    if (footerText) footerText += '  |  ';
+    footerText += s.companyPhone;
+  }
+  if (s.companyWebsite) {
+    if (footerText) footerText += '  |  ';
+    footerText += s.companyWebsite;
+  }
+  // Add custom footer text if provided
+  if (s.footerText) {
+    if (footerText) footerText += '\n';
+    footerText += s.footerText;
+  }
+  if (footerText) {
+    // Calculate text width for centering
+    const textWidth = font.widthOfTextAtSize(footerText, sizes.normal);
+    const centerX = (pageWidth - textWidth) / 2;
+    page.drawText(footerText, {
+      x: centerX,
+      y: footerY,
+      size: sizes.normal,
+      font,
+      color: accentColor,
+      lineHeight: 14,
+      maxWidth: contentWidth
+    });
+  }
 
   return await pdfDoc.save();
 };
@@ -349,7 +664,9 @@ export const downloadInvoicePDF = async (
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Invoice-${invoice.number}.pdf`;
+  // Use universal number for filename if available, fallback to regular number
+  const fileNumber = invoice.universalNumber || invoice.number;
+  a.download = `Invoice-${fileNumber}.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -358,16 +675,25 @@ export const downloadInvoicePDF = async (
 
 export const getSampleInvoiceData = (): InvoiceData => ({
   id: 'sample-1',
-  number: 'INV-2024-001',
-  amount: 1475.00,
+  number: '2020 - 125',
+  universalNumber: '2025-01', // Universal invoice number for sample
+  amount: 25.33,
   status: 'unpaid',
-  customerName: 'Acme Corporation Ltd',
-  customerEmail: 'accounts@acmecorp.co.uk',
-  createdAt: new Date().toISOString(),
+  customerName: 'Dyana Reicheneder',
+  customerEmail: 'dyana@example.de',
+  createdAt: '2021-01-05T00:00:00.000Z',
   dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  customerAddress: {
+    address_1: 'Mühlbaurstr. 7',
+    address_2: '',
+    city: 'München',
+    postcode: '81677',
+    country: 'DE',
+    state: 'Bayern',
+  },
   items: [
-    { name: 'Professional Web Design Services', quantity: 1, price: 800.00 },
-    { name: 'SEO Optimization Package', quantity: 1, price: 450.00 },
-    { name: 'Website Maintenance (3 months)', quantity: 3, price: 75.00 }
+    { name: 'Seidenstrauß Rosen mondweiß', quantity: 1, price: 15.00 },
+    { name: 'Seidenstrauß Rosen bordeaux', quantity: 1, price: 12.33 },
+    { name: 'Rabatt', quantity: 1, price: -2.00 }
   ]
 });

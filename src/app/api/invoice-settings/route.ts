@@ -9,72 +9,72 @@ import { authOptions } from '@/pages/api/auth/[...nextauth]';
 
 // ...existing code...
 
-// Default professional UK invoice settings
+// Default professional German invoice settings
 const defaultSettings = {
   // Basic Info
   logoUrl: '',
-  colorScheme: '#1e293b',
-  accentColor: '#0f172a',
+  colorScheme: '#000000',
+  accentColor: '#000000',
   
   // Company Details
-  companyName: '',
+  companyName: 'Max Mustermann',
   companyRegNumber: '',
-  vatNumber: '',
-  companyAddress: '',
-  companyCity: '',
-  companyPostcode: '',
-  companyCountry: 'United Kingdom',
+  vatNumber: '122173244432',
+  companyAddress: 'Straße 232',
+  companyCity: 'Berlin',
+  companyPostcode: '10115',
+  companyCountry: 'Deutschland',
   companyEmail: '',
   companyPhone: '',
   companyWebsite: '',
   
   // Invoice Configuration
-  invoicePrefix: 'INV',
-  invoiceNumberFormat: 'INV-{YYYY}{MM}{DD}-{###}',
+  invoicePrefix: '',
+  invoiceNumberFormat: '{YYYY} - {###}',
   dueDays: 30,
-  lateFeePercentage: 2.5,
+  lateFeePercentage: 0,
   discountType: 'percentage',
   
   // Layout & Styling
   fontSize: 'medium',
-  showLogo: true,
+  showLogo: false,
   logoPosition: 'left',
-  headerHeight: 140,
+  headerHeight: 80,
   showWatermark: false,
-  watermarkText: 'INVOICE',
+  watermarkText: 'RECHNUNG',
   watermarkOpacity: 0.1,
   
   // Content
-  footerText: 'Thank you for your business!',
-  terms: 'Payment is due within 30 days of invoice date. Late payments may incur additional charges.',
+  footerText: 'Steuerbefreit nach § 19 UStG',
+  terms: '',
   privacyPolicy: '',
   bankDetails: '',
-  paymentInstructions: 'Please reference the invoice number when making payment.',
+  paymentInstructions: '',
   
   // Tax Settings
-  defaultTaxRate: 20,
-  showTaxBreakdown: true,
-  taxLabel: 'VAT',
+  defaultTaxRate: 0,
+  showTaxBreakdown: false,
+  taxLabel: 'MwSt.',
   
   // Currency & Formatting
-  currency: 'GBP',
-  currencySymbol: '£',
-  dateFormat: 'DD/MM/YYYY',
-  numberFormat: 'UK',
+  currency: 'EUR',
+  currencySymbol: '€',
+  dateFormat: 'DD.MM.YYYY',
+  numberFormat: 'DE',
   
   // Additional Fields
-  purchaseOrderRef: true,
+  purchaseOrderRef: false,
   projectRef: false,
-  deliveryDate: false,
+  deliveryDate: true,
   notes: '',
   
   // Professional Features
   digitalSignature: '',
   approvedBy: '',
-  invoiceStatus: true,
-  showPaymentTerms: true,
+  invoiceStatus: false,
+  showPaymentTerms: false,
   multiLanguage: false,
-  language: 'en-GB',
+  language: 'de-DE',
 };
 
 export async function GET(req: NextRequest) {

@@ -51,7 +51,68 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ "sto
     const data = await res.json();
     console.log('Raw orders data for invoices:', data?.length || 0, 'orders received');
 
-    // Map WooCommerce orders to invoice format
+    // Get all stores for this user to generate universal numbers
+    const allStores = await stores.find({ uid }).toArray();
+    
+    // Fetch all invoices from all stores to generate consistent universal numbering
+    const allInvoicesPromises = allStores.map(async (userStore: any) => {
+      try {
+        const storeOrdersUrl = userStore.url.replace(/\/$/, '') + '/wp-json/wc/v3/orders';
+        const storeUrl = new URL(storeOrdersUrl);
+        storeUrl.searchParams.set('consumer_key', userStore.consumerKey);
+        storeUrl.searchParams.set('consumer_secret', userStore.consumerSecret);
+        storeUrl.searchParams.set('per_page', '50');
+        storeUrl.searchParams.set('status', 'any');
+
+        const storeRes = await fetch(storeUrl.toString(), { 
+          headers: { 'User-Agent': 'WooConnect/1.0' }
+        });
+        
+        if (!storeRes.ok) {
+          console.error(`WooCommerce API error for ${userStore.name}:`, storeRes.status, storeRes.statusText);
+          return [];
+        }
+
+        const storeOrders = await storeRes.json();
+        
+        return Array.isArray(storeOrders) ? storeOrders.map((order: any) => ({
+          ...order,
+          storeName: userStore.name,
+          storeId: userStore._id.toString()
+        })).filter((order: any) => 
+          ['pending', 'on-hold', 'processing', 'completed', 'cancelled'].includes(order.status)
+        ) : [];
+
+      } catch (error) {
+        console.error(`Error fetching orders from ${userStore.name}:`, error);
+        return [];
+      }
+    });
+
+    const allOrdersArrays = await Promise.all(allInvoicesPromises);
+    const allOrders = allOrdersArrays.flat();
+
+    // Sort by creation date to assign universal numbers consistently
+    allOrders.sort((a, b) => new Date(a.date_created).getTime() - new Date(b.date_created).getTime());
+
+    // Group orders by year and assign universal numbers
+    const ordersByYear: Record<string, any[]> = {};
+    allOrders.forEach(order => {
+      const year = new Date(order.date_created).getFullYear().toString();
+      if (!ordersByYear[year]) ordersByYear[year] = [];
+      ordersByYear[year].push(order);
+    });
+
+    // Create universal number mapping
+    const universalNumberMap: Record<string, string> = {};
+    Object.entries(ordersByYear).forEach(([year, orders]) => {
+      orders.forEach((order, idx) => {
+        const orderKey = `${order.storeName}-${order.id}`;
+        universalNumberMap[orderKey] = `${year}-${String(idx + 1).padStart(2, '0')}`;
+      });
+    });
+
+    // Map WooCommerce orders to invoice format with universal numbers
     const invoices = Array.isArray(data) ? data.map((order: any) => {
       const createdDate = new Date(order.date_created);
       const dueDate = new Date(createdDate);
@@ -67,9 +128,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ "sto
         status = now > dueDate ? 'overdue' : 'unpaid';
       }
 
+      // Get universal number for this order
+      const orderKey = `${storeName}-${order.id}`;
+      const universalNumber = universalNumberMap[orderKey];
+
       return {
         id: order.id.toString(),
         number: `INV-${order.number || order.id}`,
+        universalNumber,
         amount: parseFloat(order.total || 0),
         status,
         customerName: `${order.billing?.first_name || ''} ${order.billing?.last_name || ''}`.trim() || 'Guest Customer',
@@ -77,6 +143,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ "sto
         createdAt: order.date_created,
         dueDate: dueDate.toISOString(),
         orderStatus: order.status,
+        paymentMethod: order.payment_method_title || order.payment_method || '',
+        customerAddress: order.billing ? {
+          address_1: order.billing.address_1 || '',
+          address_2: order.billing.address_2 || '',
+          city: order.billing.city || '',
+          postcode: order.billing.postcode || '',
+          country: order.billing.country || '',
+          state: order.billing.state || '',
+        } : undefined,
         items: Array.isArray(order.line_items)
           ? order.line_items.map((item: any) => ({
               name: item.name,

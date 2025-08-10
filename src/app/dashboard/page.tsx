@@ -1,6 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { CheckCircle, AlertCircle, Store, Settings, Package, ShoppingCart, Users, BarChart3 } from 'lucide-react';
+// Types for jsPDF and jsPDF-AutoTable
+// @ts-ignore
+import type { jsPDF } from 'jspdf';
+// @ts-ignore
+import type autoTable from 'jspdf-autotable';
+import { CheckCircle, AlertCircle, Store, Settings, Package, ShoppingCart, Users, BarChart3, FileText, Download, Search, Filter, ChevronDown, Plus, RefreshCw } from 'lucide-react';
+import { downloadInvoicePDF, type InvoiceData } from '@/lib/invoicePdfGenerator';
 
 type Store = {
   id: string;
@@ -15,10 +21,36 @@ type Store = {
   };
 };
 
+interface UniversalInvoice {
+  id: string;
+  universalNumber: string;
+  storeInvoiceNumber: string;
+  storeName: string;
+  amount: number;
+  status: 'paid' | 'unpaid' | 'overdue';
+  customerName: string;
+  customerEmail?: string;
+  createdAt: string;
+  dueDate: string;
+  orderStatus?: string;
+  items?: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+  }>;
+}
+
 export default function DashboardPage() {
   const [stores, setStores] = useState<Store[]>([]);
+  const [invoices, setInvoices] = useState<UniversalInvoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
   const [showConnectForm, setShowConnectForm] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [selectedStore, setSelectedStore] = useState<string>('all');
+  const [settings, setSettings] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'unpaid' | 'overdue'>('all');
   const [formData, setFormData] = useState({
     storeName: '',
     storeUrl: '',
@@ -50,10 +82,66 @@ export default function DashboardPage() {
     setIsRefreshing(false);
   };
 
+  const fetchUniversalInvoices = async () => {
+    setInvoicesLoading(true);
+    try {
+      const res = await fetch('/api/universal-invoices');
+      if (res.ok) {
+        const data = await res.json();
+        setInvoices(data.invoices || []);
+      } else {
+        console.error('Failed to fetch universal invoices:', res.statusText);
+      }
+    } catch (error) {
+      console.error('Error fetching universal invoices:', error);
+    }
+    setInvoicesLoading(false);
+  };
+
   // Fetch existing stores on component mount
   useEffect(() => {
-    fetchStores();
+    const initData = async () => {
+      setLoading(true);
+      await fetchStores();
+      setLoading(false);
+    };
+    initData();
   }, []);
+
+  // Fetch invoices when stores change
+  useEffect(() => {
+    if (stores.length > 0) {
+      fetchUniversalInvoices();
+    } else {
+      setInvoices([]);
+    }
+  }, [stores]);
+
+  // Fetch invoice settings
+  useEffect(() => {
+    fetch('/api/invoice-settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.settings) setSettings(data.settings);
+      });
+  }, []);
+
+  // Convert universal invoice to InvoiceData format
+  const convertUniversalInvoiceToInvoiceData = (universalInvoice: UniversalInvoice): InvoiceData => {
+    return {
+      id: universalInvoice.id,
+      number: universalInvoice.storeInvoiceNumber,
+      universalNumber: universalInvoice.universalNumber,
+      amount: universalInvoice.amount,
+      status: universalInvoice.status,
+      customerName: universalInvoice.customerName,
+      customerEmail: universalInvoice.customerEmail,
+      createdAt: universalInvoice.createdAt,
+      dueDate: universalInvoice.dueDate,
+      orderStatus: universalInvoice.orderStatus,
+      items: universalInvoice.items
+    };
+  };
 
   const validateForm = () => {
     const newErrors: {
@@ -157,41 +245,69 @@ export default function DashboardPage() {
     });
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">WooCommerce Dashboard</h1>
-            <p className="text-gray-600">Manage your connected WooCommerce stores</p>
-          </div>
-          {stores.length > 0 && (
-            <button
-              onClick={fetchStores}
-              disabled={isRefreshing}
-              className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-lg transition-colors flex items-center"
-            >
-              {isRefreshing ? (
-                <span className="flex items-center">
-                  <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                  Refreshing...
-                </span>
-              ) : (
-                <span>Refresh</span>
-              )}
-            </button>
-          )}
-        </div>
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return 'bg-green-100 text-green-800';
+      case 'unpaid':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'overdue':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
-        {stores.length === 0 && !showConnectForm ? (
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'paid':
+        return <CheckCircle className="h-4 w-4" />;
+      case 'unpaid':
+        return <AlertCircle className="h-4 w-4" />;
+      case 'overdue':
+        return <AlertCircle className="h-4 w-4" />;
+      default:
+        return <AlertCircle className="h-4 w-4" />;
+    }
+  };
+
+  // Filter invoices based on selected store and status
+  const filteredInvoices = invoices.filter(invoice => {
+    const matchesStore = selectedStore === 'all' || invoice.storeName === selectedStore;
+    const matchesStatus = statusFilter === 'all' || invoice.status === statusFilter;
+    const matchesSearch = searchTerm === '' || 
+      invoice.universalNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.storeInvoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (invoice.customerEmail && invoice.customerEmail.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    return matchesStore && matchesStatus && matchesSearch;
+  });
+
+  // Calculate totals
+  const totalInvoices = filteredInvoices.length;
+  const totalAmount = filteredInvoices.reduce((sum, invoice) => sum + invoice.amount, 0);
+  const paidAmount = filteredInvoices.filter(inv => inv.status === 'paid').reduce((sum, invoice) => sum + invoice.amount, 0);
+  const unpaidAmount = filteredInvoices.filter(inv => inv.status === 'unpaid').reduce((sum, invoice) => sum + invoice.amount, 0);
+  const overdueAmount = filteredInvoices.filter(inv => inv.status === 'overdue').reduce((sum, invoice) => sum + invoice.amount, 0);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="text-gray-500 text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  if (stores.length === 0 && !showConnectForm) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="max-w-6xl mx-auto">
           <div className="bg-white p-12 rounded-xl shadow-sm text-center">
             <Store className="mx-auto h-16 w-16 text-gray-400 mb-4" />
             <h2 className="text-2xl font-bold mb-4 text-gray-900">No Stores Connected</h2>
             <p className="text-gray-600 mb-8 max-w-md mx-auto">
-              Connect your first WooCommerce store to start managing products, orders, and customers from this dashboard.
+              Connect your first WooCommerce store to start managing universal invoices across all your stores.
             </p>
             <button
               onClick={() => setShowConnectForm(true)}
@@ -200,223 +316,575 @@ export default function DashboardPage() {
               Connect Your First Store
             </button>
           </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Connected Stores */}
-            {stores.length > 0 && (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {stores.map(store => (
-                  <div key={store.id} className="bg-white rounded-xl shadow-sm p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="font-semibold text-lg text-gray-900">{store.name}</h3>
-                        <p className="text-sm text-gray-500">{store.url}</p>
+
+          {/* Connection Form */}
+          {showConnectForm && (
+            <div className="bg-white rounded-xl shadow-sm p-8 max-w-2xl mx-auto mt-8">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect WooCommerce Store</h2>
+                <p className="text-gray-600">
+                  Enter your store details to establish a connection
+                </p>
+              </div>
+
+              <form onSubmit={handleConnect}>
+                <div className="space-y-6">
+                  <div>
+                    <label htmlFor="storeName" className="block text-sm font-medium text-gray-700 mb-2">
+                      Store Name
+                    </label>
+                    <input
+                      type="text"
+                      id="storeName"
+                      name="storeName"
+                      value={formData.storeName}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.storeName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="My Awesome Store"
+                    />
+                    {errors.storeName && (
+                      <p className="text-red-500 text-sm mt-1">{errors.storeName}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="storeUrl" className="block text-sm font-medium text-gray-700 mb-2">
+                      Store URL
+                    </label>
+                    <input
+                      type="url"
+                      id="storeUrl"
+                      name="storeUrl"
+                      value={formData.storeUrl}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.storeUrl ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="https://yourstore.com"
+                    />
+                    {errors.storeUrl && (
+                      <p className="text-red-500 text-sm mt-1">{errors.storeUrl}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="consumerKey" className="block text-sm font-medium text-gray-700 mb-2">
+                      Consumer Key
+                    </label>
+                    <input
+                      type="text"
+                      id="consumerKey"
+                      name="consumerKey"
+                      value={formData.consumerKey}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.consumerKey ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="ck_xxxxxxxxxxxxxxxxx"
+                    />
+                    {errors.consumerKey && (
+                      <p className="text-red-500 text-sm mt-1">{errors.consumerKey}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="consumerSecret" className="block text-sm font-medium text-gray-700 mb-2">
+                      Consumer Secret
+                    </label>
+                    <input
+                      type="password"
+                      id="consumerSecret"
+                      name="consumerSecret"
+                      value={formData.consumerSecret}
+                      onChange={handleInputChange}
+                      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.consumerSecret ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      placeholder="cs_xxxxxxxxxxxxxxxxx"
+                    />
+                    {errors.consumerSecret && (
+                      <p className="text-red-500 text-sm mt-1">{errors.consumerSecret}</p>
+                    )}
+                  </div>
+
+                  {apiError && (
+                    <div className="text-red-600 text-sm mb-2">{apiError}</div>
+                  )}
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start">
+                      <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
+                      <div className="text-sm text-blue-700">
+                        <p className="font-medium mb-1">How to get your API credentials:</p>
+                        <ol className="list-decimal list-inside space-y-1">
+                          <li>Go to your WordPress admin → WooCommerce → Settings → Advanced → REST API</li>
+                          <li>Click "Add key" to create new API credentials</li>
+                          <li>Set permissions to "Read/Write" and copy the Consumer Key & Secret</li>
+                        </ol>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <CheckCircle className="h-5 w-5 text-green-500" />
-                        <span className="text-sm text-green-600 font-medium">Connected</span>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-4 mb-4">
-                      <div className="text-center">
-                        <Package className="h-5 w-5 text-blue-500 mx-auto mb-1" />
-                        <p className="text-sm font-medium text-gray-900">{store.stats.products}</p>
-                        <p className="text-xs text-gray-500">Products</p>
-                      </div>
-                      <div className="text-center">
-                        <ShoppingCart className="h-5 w-5 text-green-500 mx-auto mb-1" />
-                        <p className="text-sm font-medium text-gray-900">{store.stats.orders}</p>
-                        <p className="text-xs text-gray-500">Orders</p>
-                      </div>
-                      <div className="text-center">
-                        <Users className="h-5 w-5 text-purple-500 mx-auto mb-1" />
-                        <p className="text-sm font-medium text-gray-900">{store.stats.customers}</p>
-                        <p className="text-xs text-gray-500">Customers</p>
-                      </div>
-                    </div>
-                    
-                    <div className="text-xs text-gray-500 mb-4">
-                      Connected: {formatDate(store.connectedAt)}
-                    </div>
-                    
-                    <div className="flex space-x-2">
-                      <button
-                        className="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium py-2 px-3 rounded text-sm transition-colors"
-                        onClick={() => window.location.href = `/${encodeURIComponent(store.name)}/dashboard`}
-                      >
-                        <Settings className="h-4 w-4 inline mr-1" />
-                        Manage
-                      </button>
-                      <button 
-                        onClick={() => handleDisconnect(store.id)}
-                        className="bg-red-50 hover:bg-red-100 text-red-700 font-medium py-2 px-3 rounded text-sm transition-colors"
-                      >
-                        Disconnect
-                      </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
 
-            {/* Add Store Button */}
-            {stores.length > 0 && !showConnectForm && (
-              <div className="text-center">
+                  <div className="flex space-x-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowConnectForm(false);
+                        setFormData({ storeName: '', storeUrl: '', consumerKey: '', consumerSecret: '' });
+                        setErrors({});
+                      }}
+                      className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 px-4 rounded-lg transition-colors"
+                      disabled={isConnecting}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isConnecting}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                    >
+                      {isConnecting ? (
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                          Connecting...
+                        </div>
+                      ) : (
+                        'Connect Store'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex">
+      {/* Left Sidebar - Connected Stores */}
+      <div className="w-80 bg-white shadow-lg border-r border-gray-200 flex flex-col">
+        <div className="p-6 border-b border-gray-200">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">WooConnect</h1>
+          <p className="text-sm text-gray-600">Universal Invoice System</p>
+        </div>
+
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Connected Stores</h2>
+            <button
+              onClick={() => setShowConnectForm(true)}
+              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              title="Add Store"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Store Filter Buttons */}
+          <div className="space-y-2">
+            <button
+              onClick={() => setSelectedStore('all')}
+              className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                selectedStore === 'all'
+                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                  : 'hover:bg-gray-50 text-gray-700'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-medium">All Stores</span>
+                <span className="text-sm text-gray-500">{invoices.length}</span>
+              </div>
+            </button>
+
+            {stores.map(store => {
+              const storeInvoiceCount = invoices.filter(inv => inv.storeName === store.name).length;
+              return (
                 <button
-                  onClick={() => setShowConnectForm(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                  key={store.id}
+                  onClick={() => setSelectedStore(store.name)}
+                  className={`w-full text-left px-3 py-2 rounded-lg transition-colors ${
+                    selectedStore === store.name
+                      ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                      : 'hover:bg-gray-50 text-gray-700'
+                  }`}
                 >
-                  Connect Another Store
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-medium truncate">{store.name}</div>
+                      <div className="text-xs text-gray-500 flex items-center">
+                        <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
+                        Connected
+                      </div>
+                    </div>
+                    <span className="text-sm text-gray-500">{storeInvoiceCount}</span>
+                  </div>
                 </button>
-              </div>
-            )}
+              );
+            })}
+          </div>
+        </div>
 
-            {/* Connection Form */}
-            {showConnectForm && (
-              <div className="bg-white rounded-xl shadow-sm p-8 max-w-2xl mx-auto">
-                <div className="text-center mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect WooCommerce Store</h2>
-                  <p className="text-gray-600">
-                    Enter your store details to establish a connection
-                  </p>
+        {/* Store Management */}
+        <div className="p-4 border-b border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h3>
+          <div className="space-y-2">
+            <button
+              onClick={() => {
+                fetchStores();
+                fetchUniversalInvoices();
+              }}
+              disabled={isRefreshing || invoicesLoading}
+              className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${(isRefreshing || invoicesLoading) ? 'animate-spin' : ''}`} />
+              Refresh Data
+            </button>
+            <button
+              onClick={() => setShowConnectForm(true)}
+              className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Connect Store
+            </button>
+          </div>
+        </div>
+
+        {/* Summary Stats */}
+        <div className="p-4 flex-1">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">Summary</h3>
+          <div className="space-y-3">
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <div className="text-sm text-gray-600">Total Invoices</div>
+              <div className="text-xl font-bold text-gray-900">{totalInvoices}</div>
+            </div>
+            <div className="bg-green-50 p-3 rounded-lg">
+              <div className="text-sm text-green-600">Paid</div>
+              <div className="text-lg font-bold text-green-700">£{paidAmount.toFixed(2)}</div>
+            </div>
+            <div className="bg-yellow-50 p-3 rounded-lg">
+              <div className="text-sm text-yellow-600">Unpaid</div>
+              <div className="text-lg font-bold text-yellow-700">£{unpaidAmount.toFixed(2)}</div>
+            </div>
+            <div className="bg-red-50 p-3 rounded-lg">
+              <div className="text-sm text-red-600">Overdue</div>
+              <div className="text-lg font-bold text-red-700">£{overdueAmount.toFixed(2)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content - Universal Invoice System */}
+      <div className="flex-1 flex flex-col">
+        <div className="bg-white border-b border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Universal Invoices</h1>
+              <p className="text-gray-600">
+                {selectedStore === 'all' 
+                  ? `All invoices across ${stores.length} connected stores`
+                  : `Invoices from ${selectedStore}`
+                }
+              </p>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => {
+                  fetchStores();
+                  fetchUniversalInvoices();
+                }}
+                disabled={isRefreshing || invoicesLoading}
+                className="bg-blue-100 hover:bg-blue-200 text-blue-700 font-medium py-2 px-4 rounded-lg transition-colors flex items-center"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${(isRefreshing || invoicesLoading) ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Filters and Search */}
+          <div className="flex items-center space-x-4">
+            <div className="flex-1 relative">
+              <Search className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search invoices..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Filter className="h-5 w-5 text-gray-400" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'paid' | 'unpaid' | 'overdue')}
+                className="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Status</option>
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid</option>
+                <option value="overdue">Overdue</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Invoice List */}
+        <div className="flex-1 overflow-auto p-6">
+          {invoicesLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-gray-500">Loading invoices...</div>
+            </div>
+          ) : filteredInvoices.length === 0 ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Invoices Found</h3>
+                <p className="text-gray-600">
+                  {searchTerm || statusFilter !== 'all' || selectedStore !== 'all'
+                    ? 'Try adjusting your filters or search term.'
+                    : 'No invoices available from your connected stores.'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Universal Invoice #
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Store Invoice #
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Store
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Customer
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Amount
+                      </th>
+                      {/* Status column removed */}
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Created
+                      </th>
+                      {/* Due Date column removed */}
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredInvoices.map((invoice) => (
+                      <tr key={invoice.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{invoice.universalNumber}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-600">{invoice.storeInvoiceNumber}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{invoice.storeName}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{invoice.customerName}</div>
+                          {invoice.customerEmail && (
+                            <div className="text-sm text-gray-500">{invoice.customerEmail}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">£{invoice.amount.toFixed(2)}</div>
+                        </td>
+                        {/* Status cell removed */}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatDate(invoice.createdAt)}
+                        </td>
+                        {/* Due Date cell removed */}
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            className="text-blue-600 hover:text-blue-900 mr-3"
+                            onClick={async () => {
+                              try {
+                                const invoiceData = convertUniversalInvoiceToInvoiceData(invoice);
+                                await downloadInvoicePDF(invoiceData, settings || {}, invoice.storeName);
+                              } catch (error) {
+                                console.error('Error generating PDF:', error);
+                                alert('Error generating PDF. Please try again.');
+                              }
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                          <button 
+                            onClick={() => window.location.href = `/${encodeURIComponent(invoice.storeName)}/dashboard`}
+                            className="text-gray-600 hover:text-gray-900"
+                          >
+                            View Store
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Connection Form Modal */}
+      {showConnectForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect WooCommerce Store</h2>
+              <p className="text-gray-600">
+                Enter your store details to establish a connection
+              </p>
+            </div>
+
+            <form onSubmit={handleConnect}>
+              <div className="space-y-6">
+                <div>
+                  <label htmlFor="storeName" className="block text-sm font-medium text-gray-700 mb-2">
+                    Store Name
+                  </label>
+                  <input
+                    type="text"
+                    id="storeName"
+                    name="storeName"
+                    value={formData.storeName}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.storeName ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="My Awesome Store"
+                  />
+                  {errors.storeName && (
+                    <p className="text-red-500 text-sm mt-1">{errors.storeName}</p>
+                  )}
                 </div>
 
-                <form onSubmit={handleConnect}>
-                  <div className="space-y-6">
-                    <div>
-                      <label htmlFor="storeName" className="block text-sm font-medium text-gray-700 mb-2">
-                        Store Name
-                      </label>
-                      <input
-                        type="text"
-                        id="storeName"
-                        name="storeName"
-                        value={formData.storeName}
-                        onChange={handleInputChange}
-                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          errors.storeName ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                        placeholder="My Awesome Store"
-                      />
-                      {errors.storeName && (
-                        <p className="text-red-500 text-sm mt-1">{errors.storeName}</p>
-                      )}
-                    </div>
+                <div>
+                  <label htmlFor="storeUrl" className="block text-sm font-medium text-gray-700 mb-2">
+                    Store URL
+                  </label>
+                  <input
+                    type="url"
+                    id="storeUrl"
+                    name="storeUrl"
+                    value={formData.storeUrl}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.storeUrl ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="https://yourstore.com"
+                  />
+                  {errors.storeUrl && (
+                    <p className="text-red-500 text-sm mt-1">{errors.storeUrl}</p>
+                  )}
+                </div>
 
-                    <div>
-                      <label htmlFor="storeUrl" className="block text-sm font-medium text-gray-700 mb-2">
-                        Store URL
-                      </label>
-                      <input
-                        type="url"
-                        id="storeUrl"
-                        name="storeUrl"
-                        value={formData.storeUrl}
-                        onChange={handleInputChange}
-                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          errors.storeUrl ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                        placeholder="https://yourstore.com"
-                      />
-                      {errors.storeUrl && (
-                        <p className="text-red-500 text-sm mt-1">{errors.storeUrl}</p>
-                      )}
-                    </div>
+                <div>
+                  <label htmlFor="consumerKey" className="block text-sm font-medium text-gray-700 mb-2">
+                    Consumer Key
+                  </label>
+                  <input
+                    type="text"
+                    id="consumerKey"
+                    name="consumerKey"
+                    value={formData.consumerKey}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.consumerKey ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="ck_xxxxxxxxxxxxxxxxx"
+                  />
+                  {errors.consumerKey && (
+                    <p className="text-red-500 text-sm mt-1">{errors.consumerKey}</p>
+                  )}
+                </div>
 
-                    <div>
-                      <label htmlFor="consumerKey" className="block text-sm font-medium text-gray-700 mb-2">
-                        Consumer Key
-                      </label>
-                      <input
-                        type="text"
-                        id="consumerKey"
-                        name="consumerKey"
-                        value={formData.consumerKey}
-                        onChange={handleInputChange}
-                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          errors.consumerKey ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                        placeholder="ck_xxxxxxxxxxxxxxxxx"
-                      />
-                      {errors.consumerKey && (
-                        <p className="text-red-500 text-sm mt-1">{errors.consumerKey}</p>
-                      )}
-                    </div>
+                <div>
+                  <label htmlFor="consumerSecret" className="block text-sm font-medium text-gray-700 mb-2">
+                    Consumer Secret
+                  </label>
+                  <input
+                    type="password"
+                    id="consumerSecret"
+                    name="consumerSecret"
+                    value={formData.consumerSecret}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.consumerSecret ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    placeholder="cs_xxxxxxxxxxxxxxxxx"
+                  />
+                  {errors.consumerSecret && (
+                    <p className="text-red-500 text-sm mt-1">{errors.consumerSecret}</p>
+                  )}
+                </div>
 
-                    <div>
-                      <label htmlFor="consumerSecret" className="block text-sm font-medium text-gray-700 mb-2">
-                        Consumer Secret
-                      </label>
-                      <input
-                        type="password"
-                        id="consumerSecret"
-                        name="consumerSecret"
-                        value={formData.consumerSecret}
-                        onChange={handleInputChange}
-                        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                          errors.consumerSecret ? 'border-red-500' : 'border-gray-300'
-                        }`}
-                        placeholder="cs_xxxxxxxxxxxxxxxxx"
-                      />
-                      {errors.consumerSecret && (
-                        <p className="text-red-500 text-sm mt-1">{errors.consumerSecret}</p>
-                      )}
-                    </div>
+                {apiError && (
+                  <div className="text-red-600 text-sm mb-2">{apiError}</div>
+                )}
 
-                    {apiError && (
-                      <div className="text-red-600 text-sm mb-2">{apiError}</div>
-                    )}
-
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex items-start">
-                        <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
-                        <div className="text-sm text-blue-700">
-                          <p className="font-medium mb-1">How to get your API credentials:</p>
-                          <ol className="list-decimal list-inside space-y-1">
-                            <li>Go to your WordPress admin → WooCommerce → Settings → Advanced → REST API</li>
-                            <li>Click "Add key" to create new API credentials</li>
-                            <li>Set permissions to "Read/Write" and copy the Consumer Key & Secret</li>
-                          </ol>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex space-x-4">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowConnectForm(false);
-                          setFormData({ storeName: '', storeUrl: '', consumerKey: '', consumerSecret: '' });
-                          setErrors({});
-                        }}
-                        className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 px-4 rounded-lg transition-colors"
-                        disabled={isConnecting}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isConnecting}
-                        className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
-                      >
-                        {isConnecting ? (
-                          <div className="flex items-center justify-center">
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                            Connecting...
-                          </div>
-                        ) : (
-                          'Connect Store'
-                        )}
-                      </button>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
+                    <div className="text-sm text-blue-700">
+                      <p className="font-medium mb-1">How to get your API credentials:</p>
+                      <ol className="list-decimal list-inside space-y-1">
+                        <li>Go to your WordPress admin → WooCommerce → Settings → Advanced → REST API</li>
+                        <li>Click "Add key" to create new API credentials</li>
+                        <li>Set permissions to "Read/Write" and copy the Consumer Key & Secret</li>
+                      </ol>
                     </div>
                   </div>
-                </form>
+                </div>
+
+                <div className="flex space-x-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowConnectForm(false);
+                      setFormData({ storeName: '', storeUrl: '', consumerKey: '', consumerSecret: '' });
+                      setErrors({});
+                    }}
+                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 px-4 rounded-lg transition-colors"
+                    disabled={isConnecting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isConnecting}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                  >
+                    {isConnecting ? (
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                        Connecting...
+                      </div>
+                    ) : (
+                      'Connect Store'
+                    )}
+                  </button>
+                </div>
               </div>
-            )}
+            </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
