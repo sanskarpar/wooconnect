@@ -3,12 +3,12 @@
 
 
 interface SidebarProps {
-  activeTab: 'dashboard' | 'invoices' | 'orders' | 'products' | 'customers' | 'invoiceSettings';
-  onTabChange: (tab: 'dashboard' | 'invoices' | 'orders' | 'products' | 'customers' | 'invoiceSettings') => void;
+  activeTab: 'dashboard' | 'invoices' | 'orders' | 'products' | 'customers' | 'invoiceSettings' | 'storeSettings';
+  onTabChange: (tab: 'dashboard' | 'invoices' | 'orders' | 'products' | 'customers' | 'invoiceSettings' | 'storeSettings') => void;
   unpaidInvoicesCount?: number;
 }
 
-import { BarChart3, FileText, ShoppingCart, Package, Users } from 'lucide-react';
+import { BarChart3, FileText, ShoppingCart, Package, Users, Settings } from 'lucide-react';
 
 export default function Sidebar({ activeTab, onTabChange, unpaidInvoicesCount = 0 }: SidebarProps) {
   return (
@@ -100,6 +100,19 @@ export default function Sidebar({ activeTab, onTabChange, unpaidInvoicesCount = 
           >
             <FileText className="h-5 w-5" />
             Invoice Settings
+          </button>
+
+          {/* Store Settings Tab */}
+          <button
+            onClick={() => onTabChange('storeSettings')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+              activeTab === 'storeSettings'
+                ? 'bg-blue-50 text-blue-700 border-l-4 border-blue-500'
+                : 'text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Settings className="h-5 w-5" />
+            Store Settings
           </button>
         </nav>
       </div>

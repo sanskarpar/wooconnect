@@ -33,14 +33,32 @@ interface UniversalInvoice {
   createdAt: string;
   dueDate: string;
   orderStatus?: string;
+  paymentMethod?: string;
   items?: Array<{
     name: string;
     quantity: number;
     price: number;
   }>;
+  billingAddress?: {
+    address_1?: string;
+    address_2?: string;
+    city?: string;
+    state?: string;
+    postcode?: string;
+    country?: string;
+  };
 }
 
 export default function DashboardPage() {
+  // Helper to sort invoices by universalNumber (e.g., '2025-01', '2025-02', ...)
+  function sortInvoicesByUniversalNumber(invoices: UniversalInvoice[]) {
+    return [...invoices].sort((a, b) => {
+      const [yearA, numA] = a.universalNumber.split('-');
+      const [yearB, numB] = b.universalNumber.split('-');
+      if (yearA !== yearB) return yearB.localeCompare(yearA);
+      return parseInt(numB) - parseInt(numA);
+    });
+  }
   const [stores, setStores] = useState<Store[]>([]);
   const [invoices, setInvoices] = useState<UniversalInvoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +83,33 @@ export default function DashboardPage() {
   }>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Add Invoice form state
+  const [showAddInvoiceForm, setShowAddInvoiceForm] = useState(false);
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const [invoiceFormData, setInvoiceFormData] = useState({
+    storeName: '',
+    customerName: '',
+    customerEmail: '',
+    amount: '',
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+    items: [{ name: '', quantity: 1, price: 0 }],
+    billingAddress: {
+      address_1: '',
+      address_2: '',
+      city: '',
+      state: '',
+      postcode: '',
+      country: ''
+    }
+  });
+  const [invoiceErrors, setInvoiceErrors] = useState<{
+    storeName?: string;
+    customerName?: string;
+    amount?: string;
+    dueDate?: string;
+  }>({});
+  const [invoiceApiError, setInvoiceApiError] = useState<string | null>(null);
 
   const fetchStores = async () => {
     setIsRefreshing(true);
@@ -139,7 +184,9 @@ export default function DashboardPage() {
       createdAt: universalInvoice.createdAt,
       dueDate: universalInvoice.dueDate,
       orderStatus: universalInvoice.orderStatus,
-      items: universalInvoice.items
+      paymentMethod: universalInvoice.paymentMethod,
+      items: universalInvoice.items,
+      customerAddress: universalInvoice.billingAddress
     };
   };
 
@@ -233,6 +280,137 @@ export default function DashboardPage() {
 
   const handleDisconnect = (storeId: string) => {
     setStores(prev => prev.filter(store => store.id !== storeId));
+  };
+
+  // Invoice form validation
+  const validateInvoiceForm = () => {
+    const newErrors: {
+      storeName?: string;
+      customerName?: string;
+      amount?: string;
+      dueDate?: string;
+    } = {};
+
+    if (!invoiceFormData.storeName.trim()) {
+      newErrors.storeName = 'Store name is required';
+    }
+
+    if (!invoiceFormData.customerName.trim()) {
+      newErrors.customerName = 'Customer name is required';
+    }
+
+    if (!invoiceFormData.amount || parseFloat(invoiceFormData.amount) <= 0) {
+      newErrors.amount = 'Valid amount is required';
+    }
+
+    if (!invoiceFormData.dueDate) {
+      newErrors.dueDate = 'Due date is required';
+    }
+
+    setInvoiceErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleInvoiceInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    if (name.startsWith('billingAddress.')) {
+      const field = name.split('.')[1];
+      setInvoiceFormData(prev => ({
+        ...prev,
+        billingAddress: {
+          ...prev.billingAddress,
+          [field]: value
+        }
+      }));
+    } else {
+      setInvoiceFormData(prev => ({ ...prev, [name]: value }));
+    }
+    
+    // Clear error when user starts typing
+    if (invoiceErrors[name as keyof typeof invoiceErrors]) {
+      setInvoiceErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleItemChange = (index: number, field: string, value: string | number) => {
+    setInvoiceFormData(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => 
+        i === index ? { ...item, [field]: value } : item
+      )
+    }));
+  };
+
+  const addItem = () => {
+    setInvoiceFormData(prev => ({
+      ...prev,
+      items: [...prev.items, { name: '', quantity: 1, price: 0 }]
+    }));
+  };
+
+  const removeItem = (index: number) => {
+    setInvoiceFormData(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleCreateInvoice = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!validateInvoiceForm()) return;
+
+    setIsCreatingInvoice(true);
+    setInvoiceApiError(null);
+
+    try {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeName: invoiceFormData.storeName,
+          customerName: invoiceFormData.customerName,
+          customerEmail: invoiceFormData.customerEmail,
+          amount: parseFloat(invoiceFormData.amount),
+          dueDate: new Date(invoiceFormData.dueDate).toISOString(),
+          items: invoiceFormData.items.filter(item => item.name.trim() !== ''),
+          billingAddress: invoiceFormData.billingAddress
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        setInvoiceApiError(errorData.message || 'Failed to create invoice.');
+        setIsCreatingInvoice(false);
+        return;
+      }
+
+      const newInvoice = await res.json();
+      
+      // Refresh invoices to get the updated list
+      await fetchUniversalInvoices();
+      
+      setShowAddInvoiceForm(false);
+      setInvoiceFormData({
+        storeName: '',
+        customerName: '',
+        customerEmail: '',
+        amount: '',
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        items: [{ name: '', quantity: 1, price: 0 }],
+        billingAddress: {
+          address_1: '',
+          address_2: '',
+          city: '',
+          state: '',
+          postcode: '',
+          country: ''
+        }
+      });
+    } catch (err) {
+      setInvoiceApiError('Network error. Please try again.');
+    }
+    setIsCreatingInvoice(false);
   };
 
   const formatDate = (dateString: string) => {
@@ -593,6 +771,13 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center space-x-3">
               <button
+                onClick={() => setShowAddInvoiceForm(true)}
+                className="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Invoice
+              </button>
+              <button
                 onClick={() => {
                   fetchStores();
                   fetchUniversalInvoices();
@@ -684,7 +869,7 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredInvoices.map((invoice) => (
+                    {sortInvoicesByUniversalNumber(filteredInvoices).map((invoice) => (
                       <tr key={invoice.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-gray-900">{invoice.universalNumber}</div>
@@ -880,6 +1065,317 @@ export default function DashboardPage() {
                     )}
                   </button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Invoice Form Modal */}
+      {showAddInvoiceForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <form onSubmit={handleCreateInvoice} className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">Create New Invoice</h2>
+                <button
+                  type="button"
+                  onClick={() => setShowAddInvoiceForm(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="sr-only">Close</span>
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {invoiceApiError && (
+                <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                  {invoiceApiError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {/* Store Name */}
+                <div>
+                  <label htmlFor="storeName" className="block text-sm font-medium text-gray-700 mb-1">
+                    Store Name *
+                  </label>
+                  {stores.length > 0 ? (
+                    <select
+                      id="storeName"
+                      name="storeName"
+                      value={invoiceFormData.storeName}
+                      onChange={handleInvoiceInputChange}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        invoiceErrors.storeName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      required
+                    >
+                      <option value="">Select a store</option>
+                      {stores.map(store => (
+                        <option key={store.id} value={store.name}>{store.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      id="storeName"
+                      name="storeName"
+                      value={invoiceFormData.storeName}
+                      onChange={handleInvoiceInputChange}
+                      placeholder="Enter store name"
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        invoiceErrors.storeName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                      required
+                    />
+                  )}
+                  {invoiceErrors.storeName && (
+                    <p className="text-red-500 text-sm mt-1">{invoiceErrors.storeName}</p>
+                  )}
+                </div>
+
+                {/* Customer Name */}
+                <div>
+                  <label htmlFor="customerName" className="block text-sm font-medium text-gray-700 mb-1">
+                    Customer Name *
+                  </label>
+                  <input
+                    type="text"
+                    id="customerName"
+                    name="customerName"
+                    value={invoiceFormData.customerName}
+                    onChange={handleInvoiceInputChange}
+                    placeholder="Enter customer name"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      invoiceErrors.customerName ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    required
+                  />
+                  {invoiceErrors.customerName && (
+                    <p className="text-red-500 text-sm mt-1">{invoiceErrors.customerName}</p>
+                  )}
+                </div>
+
+                {/* Customer Email */}
+                <div>
+                  <label htmlFor="customerEmail" className="block text-sm font-medium text-gray-700 mb-1">
+                    Customer Email
+                  </label>
+                  <input
+                    type="email"
+                    id="customerEmail"
+                    name="customerEmail"
+                    value={invoiceFormData.customerEmail}
+                    onChange={handleInvoiceInputChange}
+                    placeholder="Enter customer email (optional)"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Billing Address */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Billing Address
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      name="billingAddress.address_1"
+                      value={invoiceFormData.billingAddress.address_1}
+                      onChange={handleInvoiceInputChange}
+                      placeholder="Address Line 1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <input
+                      type="text"
+                      name="billingAddress.address_2"
+                      value={invoiceFormData.billingAddress.address_2}
+                      onChange={handleInvoiceInputChange}
+                      placeholder="Address Line 2 (optional)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        name="billingAddress.city"
+                        value={invoiceFormData.billingAddress.city}
+                        onChange={handleInvoiceInputChange}
+                        placeholder="City"
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <input
+                        type="text"
+                        name="billingAddress.postcode"
+                        value={invoiceFormData.billingAddress.postcode}
+                        onChange={handleInvoiceInputChange}
+                        placeholder="Postcode"
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        name="billingAddress.state"
+                        value={invoiceFormData.billingAddress.state}
+                        onChange={handleInvoiceInputChange}
+                        placeholder="State/Province"
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <input
+                        type="text"
+                        name="billingAddress.country"
+                        value={invoiceFormData.billingAddress.country}
+                        onChange={handleInvoiceInputChange}
+                        placeholder="Country"
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Amount */}
+                <div>
+                  <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">
+                    Total Amount *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    id="amount"
+                    name="amount"
+                    value={invoiceFormData.amount}
+                    onChange={handleInvoiceInputChange}
+                    placeholder="0.00"
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      invoiceErrors.amount ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    required
+                  />
+                  {invoiceErrors.amount && (
+                    <p className="text-red-500 text-sm mt-1">{invoiceErrors.amount}</p>
+                  )}
+                </div>
+
+                {/* Due Date */}
+                <div>
+                  <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 mb-1">
+                    Due Date *
+                  </label>
+                  <input
+                    type="date"
+                    id="dueDate"
+                    name="dueDate"
+                    value={invoiceFormData.dueDate}
+                    onChange={handleInvoiceInputChange}
+                    min={new Date().toISOString().split('T')[0]}
+                    className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      invoiceErrors.dueDate ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                    required
+                  />
+                  {invoiceErrors.dueDate && (
+                    <p className="text-red-500 text-sm mt-1">{invoiceErrors.dueDate}</p>
+                  )}
+                </div>
+
+                {/* Items */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Invoice Items
+                  </label>
+                  {invoiceFormData.items.map((item, index) => (
+                    <div key={index} className="flex items-center space-x-2 mb-2">
+                      <input
+                        type="text"
+                        placeholder="Item name"
+                        value={item.name}
+                        onChange={(e) => handleItemChange(index, 'name', e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <input
+                        type="number"
+                        placeholder="Qty"
+                        value={item.quantity}
+                        onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 1)}
+                        className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        min="1"
+                      />
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Price"
+                        value={item.price}
+                        onChange={(e) => handleItemChange(index, 'price', parseFloat(e.target.value) || 0)}
+                        className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeItem(index)}
+                        className="text-red-500 hover:text-red-700"
+                        disabled={invoiceFormData.items.length === 1}
+                      >
+                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addItem}
+                    className="text-blue-500 hover:text-blue-700 text-sm flex items-center"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Item
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex space-x-4 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddInvoiceForm(false);
+                    setInvoiceFormData({
+                      storeName: '',
+                      customerName: '',
+                      customerEmail: '',
+                      amount: '',
+                      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                      items: [{ name: '', quantity: 1, price: 0 }],
+                      billingAddress: {
+                        address_1: '',
+                        address_2: '',
+                        city: '',
+                        state: '',
+                        postcode: '',
+                        country: ''
+                      }
+                    });
+                    setInvoiceErrors({});
+                  }}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 px-4 rounded-lg transition-colors"
+                  disabled={isCreatingInvoice}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingInvoice}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                >
+                  {isCreatingInvoice ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                      Creating...
+                    </div>
+                  ) : (
+                    'Create Invoice'
+                  )}
+                </button>
               </div>
             </form>
           </div>

@@ -51,69 +51,58 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ "sto
     const data = await res.json();
     console.log('Raw orders data for invoices:', data?.length || 0, 'orders received');
 
-    // Get all stores for this user to generate universal numbers
-    const allStores = await stores.find({ uid }).toArray();
+    // Use the same universal numbering system as the dashboard
+    // Check if WooCommerce invoices already have universal numbers stored
+    const wooInvoiceMappingCollection = db.collection('wooInvoiceMapping');
     
-    // Fetch all invoices from all stores to generate consistent universal numbering
-    const allInvoicesPromises = allStores.map(async (userStore: any) => {
-      try {
-        const storeOrdersUrl = userStore.url.replace(/\/$/, '') + '/wp-json/wc/v3/orders';
-        const storeUrl = new URL(storeOrdersUrl);
-        storeUrl.searchParams.set('consumer_key', userStore.consumerKey);
-        storeUrl.searchParams.set('consumer_secret', userStore.consumerSecret);
-        storeUrl.searchParams.set('per_page', '50');
-        storeUrl.searchParams.set('status', 'any');
-
-        const storeRes = await fetch(storeUrl.toString(), { 
-          headers: { 'User-Agent': 'WooConnect/1.0' }
-        });
-        
-        if (!storeRes.ok) {
-          console.error(`WooCommerce API error for ${userStore.name}:`, storeRes.status, storeRes.statusText);
-          return [];
-        }
-
-        const storeOrders = await storeRes.json();
-        
-        return Array.isArray(storeOrders) ? storeOrders.map((order: any) => ({
-          ...order,
-          storeName: userStore.name,
-          storeId: userStore._id.toString()
-        })).filter((order: any) => 
-          ['pending', 'on-hold', 'processing', 'completed', 'cancelled'].includes(order.status)
-        ) : [];
-
-      } catch (error) {
-        console.error(`Error fetching orders from ${userStore.name}:`, error);
-        return [];
+    // Get existing mappings for WooCommerce invoices
+    const existingMappings = await wooInvoiceMappingCollection.find({ userId: uid }).toArray();
+    const mappingMap = new Map(existingMappings.map(m => [`${m.storeName}-${m.storeInvoiceNumber}`, m.universalNumber]));
+    
+    // Process invoices and assign universal numbers using the centralized system
+    const processInvoiceUniversalNumber = async (order: any) => {
+      const storeInvoiceNumber = `INV-${order.number || order.id}`;
+      const key = `${storeName}-${storeInvoiceNumber}`;
+      
+      // Check if this invoice already has a universal number
+      const existingUniversalNumber = mappingMap.get(key);
+      
+      if (existingUniversalNumber) {
+        return existingUniversalNumber;
       }
-    });
-
-    const allOrdersArrays = await Promise.all(allInvoicesPromises);
-    const allOrders = allOrdersArrays.flat();
-
-    // Sort by creation date to assign universal numbers consistently
-    allOrders.sort((a, b) => new Date(a.date_created).getTime() - new Date(b.date_created).getTime());
-
-    // Group orders by year and assign universal numbers
-    const ordersByYear: Record<string, any[]> = {};
-    allOrders.forEach(order => {
+      
+      // If not, assign a new universal number using the centralized counter
       const year = new Date(order.date_created).getFullYear().toString();
-      if (!ordersByYear[year]) ordersByYear[year] = [];
-      ordersByYear[year].push(order);
-    });
-
-    // Create universal number mapping
-    const universalNumberMap: Record<string, string> = {};
-    Object.entries(ordersByYear).forEach(([year, orders]) => {
-      orders.forEach((order, idx) => {
-        const orderKey = `${order.storeName}-${order.id}`;
-        universalNumberMap[orderKey] = `${year}-${String(idx + 1).padStart(2, '0')}`;
+      const universalNumbersCollection = db.collection('universalNumbers');
+      
+      // Get and increment the counter
+      const counterResult = await universalNumbersCollection.findOneAndUpdate(
+        { year, userId: uid },
+        { $inc: { lastNumber: 1 } },
+        { upsert: true, returnDocument: 'after' }
+      );
+      
+      const universalNumber = `${year}-${String(counterResult?.value?.lastNumber || 1).padStart(2, '0')}`;
+      
+      // Store the mapping permanently
+      await wooInvoiceMappingCollection.insertOne({
+        userId: uid,
+        storeName: storeName,
+        storeInvoiceNumber,
+        universalNumber,
+        createdAt: new Date().toISOString()
       });
-    });
+      
+      return universalNumber;
+    };
 
     // Map WooCommerce orders to invoice format with universal numbers
-    const invoices = Array.isArray(data) ? data.map((order: any) => {
+    const filteredOrders = Array.isArray(data) ? data.filter((order: any) => 
+      // Only include orders that make sense as invoices
+      ['pending', 'on-hold', 'processing', 'completed', 'cancelled'].includes(order.status)
+    ) : [];
+
+    const invoicesPromises = filteredOrders.map(async (order: any) => {
       const createdDate = new Date(order.date_created);
       const dueDate = new Date(createdDate);
       dueDate.setDate(dueDate.getDate() + 30); // Set due date 30 days from creation
@@ -128,9 +117,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ "sto
         status = now > dueDate ? 'overdue' : 'unpaid';
       }
 
-      // Get universal number for this order
-      const orderKey = `${storeName}-${order.id}`;
-      const universalNumber = universalNumberMap[orderKey];
+      // Get universal number for this order using the centralized system
+      const universalNumber = await processInvoiceUniversalNumber(order);
 
       return {
         id: order.id.toString(),
@@ -160,10 +148,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ "sto
             }))
           : [],
       };
-    }).filter((invoice: any) => 
-      // Only include orders that make sense as invoices
-      ['pending', 'on-hold', 'processing', 'completed', 'cancelled'].includes(invoice.orderStatus)
-    ) : [];
+    });
+
+    // Wait for all invoice processing to complete
+    const invoices = await Promise.all(invoicesPromises);
 
     console.log('Processed invoices:', invoices.length);
 

@@ -204,6 +204,12 @@ export default function InvoiceSettingsPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges]);
 
+  // Preview handler (stub)
+  const handlePreview = () => {
+    // You can implement preview logic here, e.g., open a modal or generate a PDF preview
+    setNotification({ type: 'success', message: 'Preview not implemented yet.' });
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -304,26 +310,6 @@ export default function InvoiceSettingsPage() {
     }
   };
 
-  const handlePreview = async () => {
-    try {
-      // Validate required fields before generating preview
-      if (!settings.companyName?.trim()) {
-        setNotification({ type: 'error', message: 'Please enter a company name before previewing.' });
-        return;
-      }
-      
-      const sampleInvoice = getSampleInvoiceData();
-      await downloadInvoicePDF(sampleInvoice, settings, settings.companyName || 'Your Company');
-      setNotification({ type: 'success', message: 'Preview generated successfully! 📄' });
-    } catch (error) {
-      console.error('Preview error:', error);
-      setNotification({ 
-        type: 'error', 
-        message: 'Error generating preview. Please check your settings and try again.' 
-      });
-    }
-  };
-
   const handleReset = () => {
     if (confirm('Are you sure you want to reset all settings to defaults? This action cannot be undone.')) {
       setSettings(defaultSettings);
@@ -393,254 +379,287 @@ export default function InvoiceSettingsPage() {
 
   if (loading) return (
     <div className="p-8 flex items-center justify-center min-h-screen">
-      <div className="text-center">
-        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
-        <p className="text-gray-600">Loading invoice settings...</p>
+      <div>
+        <p>Loading invoice settings...</p>
       </div>
     </div>
   );
 
   return (
-    <div className="invoice-settings-container min-h-screen p-4">
+    <div className="min-h-screen p-4">
       {/* Notification Toast */}
       {notification && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 ${
-          notification.type === 'success' 
-            ? 'bg-green-500 text-white' 
-            : 'bg-red-500 text-white'
-        }`}>
-          <div className="flex items-center space-x-2">
-            <span>{notification.type === 'success' ? '✅' : '❌'}</span>
-            <span>{notification.message}</span>
-            <button 
-              onClick={() => setNotification(null)}
-              className="ml-2 text-white hover:text-gray-200"
-            >
-              ✕
-            </button>
-          </div>
+        <div
+          style={{
+            position: 'fixed',
+            top: 16,
+            right: 16,
+            zIndex: 50,
+            padding: 16,
+            borderRadius: 4,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            background: notification.type === 'success' ? '#d1fae5' : '#fee2e2',
+            color: '#000',
+            fontSize: 14,
+            fontWeight: 400,
+          }}
+        >
+          <span style={{ color: '#000' }}>{notification.message}</span>
+          <button
+            onClick={() => setNotification(null)}
+            style={{
+              marginLeft: 8,
+              background: 'none',
+              border: 'none',
+              color: '#000',
+              cursor: 'pointer',
+              fontSize: 16,
+            }}
+          >
+            ×
+          </button>
         </div>
       )}
-      
-      <div className="max-w-6xl mx-auto">
-        <div className="settings-card rounded-2xl shadow-2xl overflow-hidden">
-          {/* Enhanced Header */}
-          <div className="settings-header">
-            <div className="relative z-10">
-              <h1 className="text-4xl font-bold mb-2 flex items-center justify-center">
-                <span className="mr-4 text-5xl"></span> 
-                Professional Invoice Settings
-              </h1>
-              <p className="text-blue-100 text-lg">
-                Create stunning, professional invoices that reflect your brand
-              </p>
-              <div className="mt-4 flex justify-center space-x-4">
-                <span className="feature-badge">UK Standards</span>
-                <span className="feature-badge">VAT Compliant</span>
-                <span className="feature-badge">Customizable</span>
-                <span className="feature-badge">Responsive</span>
-              </div>
-            </div>
+
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <div style={{ border: '1px solid #e5e7eb', background: '#fff', padding: 0 }}>
+          {/* Header */}
+          <div style={{ borderBottom: '1px solid #e5e7eb', padding: '16px 24px' }}>
+            <h1 style={{ fontSize: 22, fontWeight: 500, marginBottom: 4, color: '#000' }}>
+              Professional Invoice Settings
+            </h1>
+            <p style={{ fontSize: 14, color: '#000' }}>
+              Create professional invoices that reflect your brand
+            </p>
           </div>
 
-          <div className="p-8">
-            {/* Enhanced Tabs Navigation */}
-            <div className="mb-8">
-              <div className="border-b border-gray-200">
-                <nav className="-mb-px flex space-x-2 overflow-x-auto">
+          <div style={{ padding: 24 }}>
+            {/* Tabs Navigation */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ borderBottom: '1px solid #e5e7eb' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
                   {[
-                    { id: 'general', label: 'General', icon: '' },
-                    { id: 'company', label: 'Company', icon: '' },
-                    { id: 'tax-currency', label: 'Tax & Currency', icon: '' },
-                    { id: 'advanced', label: 'Advanced', icon: '' }
+                    {
+                      id: 'general',
+                      label: 'General',
+                    },
+                    {
+                      id: 'company',
+                      label: 'Company',
+                    },
+                    {
+                      id: 'tax-currency',
+                      label: 'Tax & Currency',
+                    },
+                    {
+                      id: 'advanced',
+                      label: 'Advanced',
+                    }
                   ].map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`tab-button py-3 px-6 border-b-2 font-medium text-sm whitespace-nowrap flex items-center space-x-2 rounded-t-lg ${
-                        activeTab === tab.id
-                          ? 'active border-blue-500 text-white'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
+                      style={{
+                        background: activeTab === tab.id ? '#f3f4f6' : 'none',
+                        border: 'none',
+                        borderBottom: activeTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
+                        color: activeTab === tab.id ? '#2563eb' : '#374151',
+                        fontWeight: 400,
+                        fontSize: 14,
+                        padding: '8px 16px',
+                        cursor: 'pointer',
+                      }}
                     >
-                      {/* Removed emoji from tab icon */}
-                      <span>{tab.icon}</span>
-                      <span>{tab.label}</span>
+                      {tab.label}
                     </button>
                   ))}
-                </nav>
+                </div>
               </div>
             </div>
 
-            <div className="space-y-8">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
               {/* General Tab */}
               {activeTab === 'general' && (
-                <div className="settings-section">
-                  <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    {/* Removed emoji */}
-                    <span className="mr-3"></span> General Settings
-                  </h2>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Remove left column */}
-                    {/* Primary Color and Accent Color side by side */}
-                    <div className="flex flex-row gap-8">
-                      <div className="flex-1">
-                        <label className="block font-semibold mb-3 text-gray-700">Primary Color</label>
-                        <div className="flex space-x-4">
-                          <div className="color-picker-wrapper w-16 h-12 rounded-lg overflow-hidden">
-                            <input type="color" name="colorScheme" value={settings.colorScheme} onChange={handleChange} className="w-full h-full border-none" />
-                          </div>
-                          <input type="text" name="colorScheme" value={settings.colorScheme} onChange={handleChange} className="form-input flex-1 border rounded-lg px-4 py-3 text-gray-700" placeholder="#2563eb" />
-                        </div>
-                        <p className="text-sm text-gray-500 mt-2">Primary brand color for headers and accents</p>
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 500, marginBottom: 16, color: '#000' }}>General Settings</h2>
+                  <div style={{ display: 'flex', gap: 32 }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontWeight: 400, marginBottom: 8, display: 'block', color: '#000' }}>Primary Color</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          type="color"
+                          name="colorScheme"
+                          value={settings.colorScheme}
+                          onChange={handleChange}
+                          style={{ color: '#000' }}
+                        />
+                        <input
+                          type="text"
+                          name="colorScheme"
+                          value={settings.colorScheme}
+                          onChange={handleChange}
+                          style={{ color: '#000' }}
+                        />
                       </div>
-                      <div className="flex-1">
-                        <label className="block font-semibold mb-3 text-gray-700">Accent Color</label>
-                        <div className="flex space-x-4">
-                          <div className="color-picker-wrapper w-16 h-12 rounded-lg overflow-hidden">
-                            <input type="color" name="accentColor" value={settings.accentColor} onChange={handleChange} className="w-full h-full border-none" />
-                          </div>
-                          <input type="text" name="accentColor" value={settings.accentColor} onChange={handleChange} className="form-input flex-1 border rounded-lg px-4 py-3 text-gray-700" placeholder="#1e40af" />
-                        </div>
-                        <p className="text-sm text-gray-500 mt-2">Secondary color for highlights and buttons</p>
+                      <p style={{ fontSize: 12, color: '#000', marginTop: 4 }}>Primary brand color</p>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontWeight: 400, marginBottom: 8, display: 'block', color: '#000' }}>Accent Color</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          type="color"
+                          name="accentColor"
+                          value={settings.accentColor}
+                          onChange={handleChange}
+                          style={{ color: '#000' }}
+                        />
+                        <input
+                          type="text"
+                          name="accentColor"
+                          value={settings.accentColor}
+                          onChange={handleChange}
+                          style={{ color: '#000' }}
+                        />
                       </div>
+                      <p style={{ fontSize: 12, color: '#000', marginTop: 4 }}>Secondary color</p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Company Tab - Enhanced */}
+              {/* Company Tab */}
               {activeTab === 'company' && (
-                <div className="settings-section">
-                  <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    {/* Removed emoji */}
-                    <span className="mr-3"></span> Company Information
-                  </h2>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="space-y-6">
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 500, marginBottom: 16, color: '#000' }}>Company Information</h2>
+                  <div style={{ display: 'flex', gap: 32 }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
                       <div>
-                        <label className="block font-semibold mb-3 text-gray-700">
-                          Company Name <span className="text-red-500">*</span>
+                        <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>
+                          Company Name <span style={{ color: '#000' }}>*</span>
                         </label>
-                        <input 
-                          name="companyName" 
-                          value={settings.companyName} 
-                          onChange={handleChange} 
-                          className={`form-input w-full border rounded-xl px-4 py-3 text-gray-700 ${
-                            errors.companyName ? 'border-red-500 bg-red-50' : ''
-                          }`} 
-                          placeholder="Your Company Ltd" 
+                        <input
+                          name="companyName"
+                          value={settings.companyName}
+                          onChange={handleChange}
+                          style={{
+                            width: '100%',
+                            border: errors.companyName ? '1px solid #dc2626' : '1px solid #d1d5db',
+                            padding: '8px',
+                            fontSize: 14,
+                            color: '#000',
+                          }}
+                          placeholder="Your Company Ltd"
                           required
                         />
                         {errors.companyName && (
-                          <p className="text-red-500 text-sm mt-1">{errors.companyName}</p>
+                          <p style={{ color: '#000', fontSize: 12, marginTop: 2 }}>{errors.companyName}</p>
                         )}
                       </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Company Registration</label>
-                          <input 
-                            name="companyRegNumber" 
-                            value={settings.companyRegNumber} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700" 
-                            placeholder="12345678" 
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">VAT Number</label>
-                          <input 
-                            name="vatNumber" 
-                            value={settings.vatNumber} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700" 
-                            placeholder="GB123456789" 
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>Company Registration</label>
+                          <input
+                            name="companyRegNumber"
+                            value={settings.companyRegNumber}
+                            onChange={handleChange}
+                            style={{ width: '100%', border: '1px solid #d1d5db', padding: '8px', fontSize: 14, color: '#000' }}
+                            placeholder="12345678"
                           />
                         </div>
                       </div>
-
                       <div>
-                        <label className="block font-semibold mb-3 text-gray-700">Website</label>
-                        <input 
-                          name="companyWebsite" 
-                          value={settings.companyWebsite} 
-                          onChange={handleChange} 
-                          className={`form-input w-full border rounded-xl px-4 py-3 text-gray-700 ${
-                            errors.companyWebsite ? 'border-red-500 bg-red-50' : ''
-                          }`} 
-                          placeholder="www.yourcompany.com" 
+                        <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>VAT Number</label>
+                        <input
+                          name="vatNumber"
+                          value={settings.vatNumber}
+                          onChange={handleChange}
+                          style={{ width: '100%', border: '1px solid #d1d5db', padding: '8px', fontSize: 14, color: '#000' }}
+                          placeholder="GB123456789"
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>Website</label>
+                        <input
+                          name="companyWebsite"
+                          value={settings.companyWebsite}
+                          onChange={handleChange}
+                          style={{
+                            width: '100%',
+                            border: errors.companyWebsite ? '1px solid #dc2626' : '1px solid #d1d5db',
+                            padding: '8px',
+                            fontSize: 14,
+                            color: '#000',
+                          }}
+                          placeholder="www.yourcompany.com"
                         />
                         {errors.companyWebsite && (
-                          <p className="text-red-500 text-sm mt-1">{errors.companyWebsite}</p>
+                          <p style={{ color: '#000', fontSize: 12, marginTop: 2 }}>{errors.companyWebsite}</p>
                         )}
                       </div>
                     </div>
-
-                    <div className="space-y-6">
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
                       <div>
-                        <label className="block font-semibold mb-3 text-gray-700">Complete Address</label>
-                        <div className="space-y-4">
-                          <input 
-                            name="companyAddress" 
-                            value={settings.companyAddress} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700" 
-                            placeholder="123 Business Street" 
+                        <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>Complete Address</label>
+                        <input
+                          name="companyAddress"
+                          value={settings.companyAddress}
+                          onChange={handleChange}
+                          style={{ width: '100%', border: '1px solid #d1d5db', padding: '8px', fontSize: 14, marginBottom: 8, color: '#000' }}
+                          placeholder="123 Business Street"
+                        />
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <input
+                            name="companyCity"
+                            value={settings.companyCity}
+                            onChange={handleChange}
+                            style={{ flex: 1, border: '1px solid #d1d5db', padding: '8px', fontSize: 14, color: '#000' }}
+                            placeholder="London"
                           />
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <input 
-                              name="companyCity" 
-                              value={settings.companyCity} 
-                              onChange={handleChange} 
-                              className="form-input border rounded-xl px-4 py-3 text-gray-700" 
-                              placeholder="London" 
-                            />
-                            <input 
-                              name="companyPostcode" 
-                              value={settings.companyPostcode} 
-                              onChange={handleChange} 
-                              className="form-input border rounded-xl px-4 py-3 text-gray-700" 
-                              placeholder="SW1A 1AA" 
-                            />
-                            <input 
-                              name="companyCountry" 
-                              value={settings.companyCountry} 
-                              onChange={handleChange} 
-                              className="form-input border rounded-xl px-4 py-3 text-gray-700" 
-                              placeholder="United Kingdom" 
-                            />
-                          </div>
+                          <input
+                            name="companyPostcode"
+                            value={settings.companyPostcode}
+                            onChange={handleChange}
+                            style={{ flex: 1, border: '1px solid #d1d5db', padding: '8px', fontSize: 14, color: '#000' }}
+                            placeholder="SW1A 1AA"
+                          />
+                          <input
+                            name="companyCountry"
+                            value={settings.companyCountry}
+                            onChange={handleChange}
+                            style={{ flex: 1, border: '1px solid #d1d5db', padding: '8px', fontSize: 14, color: '#000' }}
+                            placeholder="United Kingdom"
+                          />
                         </div>
                       </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Email</label>
-                          <input 
-                            name="companyEmail" 
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>Email</label>
+                          <input
+                            name="companyEmail"
                             type="email"
-                            value={settings.companyEmail} 
-                            onChange={handleChange} 
-                            className={`form-input w-full border rounded-xl px-4 py-3 text-gray-700 ${
-                              errors.companyEmail ? 'border-red-500 bg-red-50' : ''
-                            }`} 
-                            placeholder="info@yourcompany.com" 
+                            value={settings.companyEmail}
+                            onChange={handleChange}
+                            style={{
+                              width: '100%',
+                              border: errors.companyEmail ? '1px solid #dc2626' : '1px solid #d1d5db',
+                              padding: '8px',
+                              fontSize: 14,
+                              color: '#000',
+                            }}
+                            placeholder="info@yourcompany.com"
                           />
                           {errors.companyEmail && (
-                            <p className="text-red-500 text-sm mt-1">{errors.companyEmail}</p>
+                            <p style={{ color: '#000', fontSize: 12, marginTop: 2 }}>{errors.companyEmail}</p>
                           )}
                         </div>
-                        
-                        <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Phone</label>
-                          <input 
-                            name="companyPhone" 
-                            value={settings.companyPhone} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700" 
-                            placeholder="+44 20 1234 5678" 
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>Phone</label>
+                          <input
+                            name="companyPhone"
+                            value={settings.companyPhone}
+                            onChange={handleChange}
+                            style={{ width: '100%', border: '1px solid #d1d5db', padding: '8px', fontSize: 14, color: '#000' }}
+                            placeholder="+44 20 1234 5678"
                           />
                         </div>
                       </div>
@@ -651,54 +670,46 @@ export default function InvoiceSettingsPage() {
 
               {/* Tax & Currency Tab */}
               {activeTab === 'tax-currency' && (
-                <div className="settings-section">
-                  <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    {/* Removed emoji */}
-                    <span className="mr-3"></span> Tax & Currency Settings
-                  </h2>
-                  <div className="space-y-8">
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 500, marginBottom: 16, color: '#000' }}>Tax & Currency Settings</h2>
+                  <div style={{ display: 'flex', gap: 32 }}>
                     {/* Currency Settings */}
-                    <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-xl p-6 border border-yellow-200">
-                      <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                        {/* Removed emoji */}
-                        <span className="mr-2"></span> Currency Configuration
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div style={{ flex: 1, border: '1px solid #e5e7eb', padding: 16 }}>
+                      <h3 style={{ fontWeight: 500, fontSize: 15, marginBottom: 12, color: '#000' }}>Currency Configuration</h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Currency</label>
-                          <select 
-                            name="currency" 
-                            value={settings.currency} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700"
+                          <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>Currency</label>
+                          <select
+                            name="currency"
+                            value={settings.currency}
+                            onChange={handleChange}
+                            style={{ width: '100%', padding: '8px', fontSize: 14, border: '1px solid #d1d5db', color: '#000' }}
                           >
-                            <option value="GBP">🇬🇧 British Pound (£)</option>
-                            <option value="USD">🇺🇸 US Dollar ($)</option>
-                            <option value="EUR">🇪🇺 Euro (€)</option>
-                            <option value="CAD">🇨🇦 Canadian Dollar (C$)</option>
-                            <option value="AUD">🇦🇺 Australian Dollar (A$)</option>
+                            <option value="GBP">British Pound (£)</option>
+                            <option value="USD">US Dollar ($)</option>
+                            <option value="EUR">Euro (€)</option>
+                            <option value="CAD">Canadian Dollar (C$)</option>
+                            <option value="AUD">Australian Dollar (A$)</option>
                           </select>
                         </div>
-                        
                         <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Currency Symbol</label>
-                          <input 
-                            name="currencySymbol" 
-                            value={settings.currencySymbol} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700 text-center text-2xl" 
-                            placeholder="£" 
+                          <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>Currency Symbol</label>
+                          <input
+                            name="currencySymbol"
+                            value={settings.currencySymbol}
+                            onChange={handleChange}
+                            style={{ width: '100%', padding: '8px', fontSize: 14, border: '1px solid #d1d5db', color: '#000' }}
+                            placeholder="£"
                             maxLength={3}
                           />
                         </div>
-                        
                         <div>
-                          <label className="block font-semibold mb-3 text-gray-700">Number Format</label>
-                          <select 
-                            name="numberFormat" 
-                            value={settings.numberFormat} 
-                            onChange={handleChange} 
-                            className="form-input w-full border rounded-xl px-4 py-3 text-gray-700"
+                          <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>Number Format</label>
+                          <select
+                            name="numberFormat"
+                            value={settings.numberFormat}
+                            onChange={handleChange}
+                            style={{ width: '100%', padding: '8px', fontSize: 14, border: '1px solid #d1d5db', color: '#000' }}
                           >
                             <option value="UK">UK (1,234.56)</option>
                             <option value="EU">EU (1.234,56)</option>
@@ -707,102 +718,69 @@ export default function InvoiceSettingsPage() {
                         </div>
                       </div>
                     </div>
-
                     {/* Tax Settings */}
-                    <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-200">
-                      <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                        {/* Removed emoji */}
-                        <span className="mr-2"></span> Tax Configuration
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-6">
-                          <div>
-                            <label className="block font-semibold mb-3 text-gray-700">Default Tax Rate (%)</label>
-                            <div className="relative">
-                              <input 
-                                type="number" 
-                                name="defaultTaxRate" 
-                                value={settings.defaultTaxRate} 
-                                onChange={handleChange} 
-                                className={`form-input w-full border rounded-xl px-4 py-3 text-gray-700 pr-12 ${
-                                  errors.defaultTaxRate ? 'border-red-500 bg-red-50' : ''
-                                }`} 
-                                min="0" 
-                                max="100" 
-                                step="0.1" 
-                              />
-                              <span className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500">%</span>
-                            </div>
-                            {errors.defaultTaxRate && (
-                              <p className="text-red-500 text-sm mt-1">{errors.defaultTaxRate}</p>
-                            )}
-                            <p className="text-sm text-gray-500 mt-2">
-                              Current: {settings.defaultTaxRate}% - Standard VAT rate for your region
-                            </p>
-                          </div>
-                          
-                          <div>
-                            <label className="block font-semibold mb-3 text-gray-700">Tax Label</label>
-                            <input 
-                              name="taxLabel" 
-                              value={settings.taxLabel} 
-                              onChange={handleChange} 
-                              className="form-input w-full border rounded-xl px-4 py-3 text-gray-700" 
-                              placeholder="VAT" 
-                            />
-                            <p className="text-sm text-gray-500 mt-2">
-                              How tax appears on invoices: "{settings.taxLabel || 'VAT'}" (VAT, GST, Tax, Sales Tax)
-                            </p>
-                          </div>
+                    <div style={{ flex: 1, border: '1px solid #e5e7eb', padding: 16 }}>
+                      <h3 style={{ fontWeight: 500, fontSize: 15, marginBottom: 12, color: '#000' }}>Tax Configuration</h3>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div>
+                          <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>Default Tax Rate (%)</label>
+                          <input
+                            type="number"
+                            name="defaultTaxRate"
+                            value={settings.defaultTaxRate}
+                            onChange={handleChange}
+                            style={{
+                              width: '100%',
+                              padding: '8px',
+                              fontSize: 14,
+                              border: errors.defaultTaxRate ? '1px solid #dc2626' : '1px solid #d1d5db',
+                              color: '#000',
+                            }}
+                            min="0"
+                            max="100"
+                            step="0.1"
+                          />
+                          {errors.defaultTaxRate && (
+                            <p style={{ color: '#000', fontSize: 12, marginTop: 2 }}>{errors.defaultTaxRate}</p>
+                          )}
+                          <p style={{ fontSize: 12, color: '#000', marginTop: 4 }}>
+                            Current: {settings.defaultTaxRate}% - Standard VAT rate for your region
+                          </p>
                         </div>
-
-                        <div className="space-y-6">
-                          <div className="bg-white rounded-lg p-4 border border-gray-200">
-                            <h4 className="font-semibold text-gray-700 mb-3">Tax Display Options</h4>
-                            <div className="space-y-3">
-                              <label className="checkbox-item">
-                                <input 
-                                  type="checkbox" 
-                                  name="showTaxBreakdown" 
-                                  checked={settings.showTaxBreakdown} 
-                                  onChange={handleToggle} 
-                                />
-                                <span>Show Tax Breakdown</span>
-                              </label>
-                              <label className="checkbox-item">
-                                <input 
-                                  type="checkbox" 
-                                  name="showPaymentTerms" 
-                                  checked={settings.showPaymentTerms} 
-                                  onChange={handleToggle} 
-                                />
-                                <span>Display Payment Terms</span>
-                              </label>
-                            </div>
-                            
-                            {settings.showTaxBreakdown && (
-                              <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                                <h5 className="text-sm font-medium text-green-800 mb-2">Tax Preview</h5>
-                                <div className="text-xs space-y-1 text-green-700">
-                                  <div>Subtotal: £100.00</div>
-                                  <div>{settings.taxLabel} ({settings.defaultTaxRate}%): £{(100 * (settings.defaultTaxRate / 100)).toFixed(2)}</div>
-                                  <div className="font-bold border-t border-green-300 pt-1">
-                                    Total: £{(100 + (100 * (settings.defaultTaxRate / 100))).toFixed(2)}
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
-                            <h4 className="font-semibold text-amber-700 mb-2">Tax Tips</h4>
-                            <ul className="text-sm text-amber-600 space-y-1">
-                              <li>• UK Standard VAT: 20%</li>
-                              <li>• EU VAT: varies by country</li>
-                              <li>• US Sales Tax: varies by state</li>
-                              <li>• Always check local regulations</li>
-                            </ul>
-                          </div>
+                        <div>
+                          <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>Tax Label</label>
+                          <input
+                            name="taxLabel"
+                            value={settings.taxLabel}
+                            onChange={handleChange}
+                            style={{ width: '100%', padding: '8px', fontSize: 14, border: '1px solid #d1d5db', color: '#000' }}
+                            placeholder="VAT"
+                          />
+                          <p style={{ fontSize: 12, color: '#000', marginTop: 4 }}>
+                            How tax appears on invoices: "{settings.taxLabel || 'VAT'}"
+                          </p>
+                        </div>
+                        <div>
+                          <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>
+                            <input
+                              type="checkbox"
+                              name="showTaxBreakdown"
+                              checked={settings.showTaxBreakdown}
+                              onChange={handleToggle}
+                              style={{ marginRight: 8 }}
+                            />
+                            Show Tax Breakdown
+                          </label>
+                          <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>
+                            <input
+                              type="checkbox"
+                              name="showPaymentTerms"
+                              checked={settings.showPaymentTerms}
+                              onChange={handleToggle}
+                              style={{ marginRight: 8 }}
+                            />
+                            Display Payment Terms
+                          </label>
                         </div>
                       </div>
                     </div>
@@ -812,59 +790,59 @@ export default function InvoiceSettingsPage() {
 
               {/* Advanced Tab */}
               {activeTab === 'advanced' && (
-                <div className="settings-section">
-                  <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center">
-                    {/* Removed emoji */}
-                    <span className="mr-3"></span> Advanced Features
-                  </h2>
-                  <div className="space-y-8">
-                    {/* Issuing Authority */}
-                    <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-xl p-6 border border-green-200">
-                      <h3 className="font-semibold text-gray-700 mb-4 flex items-center">
-                        {/* Removed emoji */}
-                        <span className="mr-2"></span> Issuing Authority
-                      </h3>
-                      <div className="max-w-md">
-                        <label className="block font-semibold mb-3 text-gray-700">Authorized By</label>
-                        <input 
-                          name="approvedBy" 
-                          value={settings.approvedBy} 
-                          onChange={handleChange} 
-                          className="form-input w-full border rounded-xl px-4 py-3 text-gray-700" 
-                          placeholder="John Smith, Director" 
-                        />
-                        <p className="text-sm text-gray-500 mt-2">Name and title of authorized person</p>
-                      </div>
-                    </div>
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 500, marginBottom: 16, color: '#000' }}>Advanced Features</h2>
+                  <div style={{ border: '1px solid #e5e7eb', padding: 16, maxWidth: 400 }}>
+                    <h3 style={{ fontWeight: 500, fontSize: 15, marginBottom: 12, color: '#000' }}>Issuing Authority</h3>
+                    <label style={{ fontWeight: 400, marginBottom: 4, display: 'block', color: '#000' }}>Authorized By</label>
+                    <input
+                      name="approvedBy"
+                      value={settings.approvedBy}
+                      onChange={handleChange}
+                      style={{ width: '100%', padding: '8px', fontSize: 14, border: '1px solid #d1d5db', color: '#000' }}
+                      placeholder="John Smith, Director"
+                    />
+                    <p style={{ fontSize: 12, color: '#000', marginTop: 4 }}>Name and title of authorized person</p>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Enhanced Action Buttons */}
-            <div className="action-buttons mt-12 pt-8 border-t">
-              <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 sm:space-x-4">
-                <div className="flex space-x-4">
-                  <button 
-                    onClick={handleSave} 
-                    disabled={saving} 
-                    className={`btn-primary px-10 py-3 rounded-xl font-semibold transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed ${
-                      hasUnsavedChanges ? 'bg-orange-500 hover:bg-orange-600' : ''
-                    }`}
-                  >
-                    {saving ? (
-                      <span className="flex items-center">
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Saving...
-                      </span>
-                    ) : (
-                      `${hasUnsavedChanges ? 'Save Changes' : 'Save Settings'}`
-                    )}
-                  </button>
-                </div>
+            {/* Action Buttons */}
+            <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid #e5e7eb' }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  style={{
+                    padding: '8px 24px',
+                    borderRadius: 4,
+                    fontWeight: 500,
+                    fontSize: 14,
+                    background: hasUnsavedChanges ? '#e0cbb4ff' : '#85c5e0ff', // sky blue
+                    color: '#000',
+                    border: 'none',
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                    opacity: saving ? 0.6 : 1,
+                  }}
+                >
+                  {saving ? 'Saving...' : hasUnsavedChanges ? 'Save Changes' : 'Save Settings'}
+                </button>
+                <button
+                  onClick={handleReset}
+                  style={{
+                    padding: '8px 24px',
+                    borderRadius: 4,
+                    fontWeight: 500,
+                    fontSize: 14,
+                    background: '#e5e7eb',
+                    color: '#000',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Reset to Defaults
+                </button>
               </div>
             </div>
           </div>
@@ -873,6 +851,7 @@ export default function InvoiceSettingsPage() {
     </div>
   );
 }
+
 
 
 

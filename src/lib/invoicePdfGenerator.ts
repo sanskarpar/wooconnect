@@ -99,6 +99,17 @@ export const generateProfessionalUKInvoicePDF = async (
   settings: Partial<InvoiceSettings>,
   storeName?: string
 ): Promise<Uint8Array> => {
+  // Map billingAddress to customerAddress if present
+  if (!invoice.customerAddress && (invoice as any).billingAddress) {
+    invoice.customerAddress = (invoice as any).billingAddress;
+  }
+  
+  // Debug logging to see what address data we have
+  console.log('Invoice address data:', {
+    customerAddress: invoice.customerAddress,
+    billingAddress: (invoice as any).billingAddress,
+    customerName: invoice.customerName
+  });
   // Default German invoice settings matching the actual settings interface
   const s: InvoiceSettings = {
     // Basic Info
@@ -200,7 +211,98 @@ export const generateProfessionalUKInvoicePDF = async (
   };
   const sizes = fontSizes[s.fontSize];
   
-  let yPos = pageHeight - margin - 50;
+  let yPos = pageHeight - margin - 20;
+
+  // Company info in one line at the top
+  const companyParts = [];
+  if (s.companyName) companyParts.push(s.companyName);
+  if (s.companyAddress) companyParts.push(s.companyAddress);
+  if (s.companyPostcode && s.companyCity) companyParts.push(`${s.companyPostcode} ${s.companyCity}`);
+  if (s.companyCountry) companyParts.push(s.companyCountry);
+  
+  if (companyParts.length > 0) {
+    const companyLine = companyParts.join(', ');
+    page.drawText(companyLine, {
+      x: margin,
+      y: yPos,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    yPos -= 20;
+  }
+
+  // Customer address section
+  yPos -= 10;
+  page.drawText(invoice.customerName || 'Guest Customer', {
+    x: margin,
+    y: yPos,
+    size: sizes.normal,
+    font,
+    color: black
+  });
+  yPos -= 15;
+  
+  // Debug: Show what address data we actually have
+  console.log('Rendering buyer address:', invoice.customerAddress);
+  
+  // Customer Address Line 1
+  if (invoice.customerAddress?.address_1) {
+    page.drawText(invoice.customerAddress.address_1, {
+      x: margin,
+      y: yPos,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    yPos -= 15;
+  } else {
+    console.log('No address_1 found in customerAddress');
+  }
+  
+  // Customer Address Line 2 (if exists)
+  if (invoice.customerAddress?.address_2) {
+    page.drawText(invoice.customerAddress.address_2, {
+      x: margin,
+      y: yPos,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    yPos -= 15;
+  }
+  
+  // City, Postcode, State, Country
+  const customerCityLine = [];
+  if (invoice.customerAddress?.postcode) customerCityLine.push(invoice.customerAddress.postcode);
+  if (invoice.customerAddress?.city) customerCityLine.push(invoice.customerAddress.city);
+  if (invoice.customerAddress?.state) customerCityLine.push(invoice.customerAddress.state);
+  if (invoice.customerAddress?.country) customerCityLine.push(invoice.customerAddress.country);
+  if (customerCityLine.length > 0) {
+    page.drawText(customerCityLine.join(', '), {
+      x: margin,
+      y: yPos,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    yPos -= 15;
+  }
+
+  // Customer email
+  if (invoice.customerEmail) {
+    page.drawText(invoice.customerEmail, {
+      x: margin,
+      y: yPos,
+      size: sizes.normal,
+      font,
+      color: black
+    });
+    yPos -= 15;
+  }
+
+  // Add gap before invoice section
+  yPos -= 30;
 
   // Invoice title with custom color
   const titleText = 'Rechnung';
@@ -261,162 +363,16 @@ export const generateProfessionalUKInvoicePDF = async (
   yPos -= 15;
   
   // Payment method
-  // Use real payment method if available
-
-  // Billing Addresses Section
-  yPos -= 40;
-  
-  // Seller address (left side)
-  
-  // Company email
-
-  // Store current Y position for buyer section
-  // Horizontal alignment for Verkäufer and Käufer
-  const addressY = yPos;
-  const buyerX = margin + 280;
-  let sellerY = addressY;
-  let buyerY = addressY;
-
-  // Verkäufer
-  page.drawText('Verkäufer:', {
-    x: margin,
-    y: sellerY,
-    size: sizes.normal,
-    font: fontBold,
-    color: black
-  });
-  sellerY -= 15;
-  if (s.companyName) {
-    page.drawText(s.companyName, {
+  if (invoice.paymentMethod) {
+    page.drawText(`Zahlungsmethode: ${invoice.paymentMethod}`, {
       x: margin,
-      y: sellerY,
+      y: yPos,
       size: sizes.normal,
       font,
       color: black
     });
-    sellerY -= 12;
+    yPos -= 15;
   }
-  if (s.companyAddress) {
-    page.drawText(s.companyAddress, {
-      x: margin,
-      y: sellerY,
-      size: sizes.normal,
-      font,
-      color: black
-    });
-    sellerY -= 12;
-  }
-  if (s.companyPostcode && s.companyCity) {
-    page.drawText(`${s.companyPostcode} ${s.companyCity}`, {
-      x: margin,
-      y: sellerY,
-      size: sizes.normal,
-      font,
-      color: black
-    });
-    sellerY -= 12;
-  }
-  if (s.companyCountry) {
-    page.drawText(s.companyCountry, {
-      x: margin,
-      y: sellerY,
-      size: sizes.normal,
-      font,
-      color: black
-    });
-    sellerY -= 12;
-  }
-
-  // Käufer
-  page.drawText('Käufer:', {
-    x: buyerX,
-    y: buyerY,
-    size: sizes.normal,
-    font: fontBold,
-    color: black
-  });
-  buyerY -= 15;
-  page.drawText(invoice.customerName || 'Guest Customer', {
-    x: buyerX,
-    y: buyerY,
-    size: sizes.normal,
-    font,
-    color: black
-  });
-  buyerY -= 12;
-  
-  // Customer Address Line 1
-  if (invoice.customerAddress?.address_1) {
-    page.drawText(invoice.customerAddress.address_1, {
-      x: buyerX,
-      y: buyerY,
-      size: sizes.normal,
-      font,
-      color: black
-    });
-    buyerY -= 12;
-  }
-  
-  // Customer Address Line 2 (if exists)
-  if (invoice.customerAddress?.address_2) {
-    page.drawText(invoice.customerAddress.address_2, {
-      x: buyerX,
-      y: buyerY,
-      size: sizes.normal,
-      font,
-      color: black
-    });
-    buyerY -= 12;
-  }
-  
-  // City, Postcode, State, Country
-  const cityLine = [];
-  if (invoice.customerAddress?.postcode) cityLine.push(invoice.customerAddress.postcode);
-  if (invoice.customerAddress?.city) cityLine.push(invoice.customerAddress.city);
-  if (invoice.customerAddress?.state) cityLine.push(invoice.customerAddress.state);
-  if (invoice.customerAddress?.country) cityLine.push(invoice.customerAddress.country);
-  
-  if (cityLine.length > 0) {
-    page.drawText(cityLine.join(', '), {
-      x: buyerX,
-      y: buyerY,
-      size: sizes.normal,
-      font,
-      color: black
-    });
-    buyerY -= 12;
-  } else {
-    // Fallback to default address if no customer address is available
-    page.drawText('Mühlbaurstr. 7', {
-      x: buyerX,
-      y: buyerY,
-      size: sizes.normal,
-      font,
-      color: black
-    });
-    buyerY -= 12;
-    page.drawText('81677 München, DE', {
-      x: buyerX,
-      y: buyerY,
-      size: sizes.normal,
-      font,
-      color: black
-    });
-    buyerY -= 12;
-  }
-  
-  if (invoice.customerEmail) {
-    page.drawText(invoice.customerEmail, {
-      x: buyerX,
-      y: buyerY,
-      size: sizes.small,
-      font,
-      color: black
-    });
-  }
-
-  // Reset yPos to continue after addresses
-  yPos = Math.min(sellerY, buyerY) - 20;
 
   // Items Table
   yPos -= 40;
@@ -683,6 +639,7 @@ export const getSampleInvoiceData = (): InvoiceData => ({
   customerEmail: 'dyana@example.de',
   createdAt: '2021-01-05T00:00:00.000Z',
   dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  paymentMethod: 'PayPal',
   customerAddress: {
     address_1: 'Mühlbaurstr. 7',
     address_2: '',

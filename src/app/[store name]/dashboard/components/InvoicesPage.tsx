@@ -26,6 +26,7 @@ interface Invoice {
   createdAt: string;
   dueDate: string;
   orderStatus?: string;
+  paymentMethod?: string;
   customerAddress?: {
     address_1?: string;
     address_2?: string;

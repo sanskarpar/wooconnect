@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Package, ShoppingCart, Users, BarChart3, AlertTriangle, RefreshCw, FileText, DollarSign } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import InvoiceSettingsPage from './components/InvoiceSettingsPage';
+import StoreSettingsPage from './components/StoreSettingsPage';
 import InvoicesPage from './components/InvoicesPage';
 import OrdersPage from './components/OrdersPage';
 import ProductsPage from './components/ProductsPage';
@@ -35,7 +36,7 @@ export default function StoreDashboardPage() {
   const storeName = params?.['store name'];
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'invoices' | 'orders' | 'products' | 'customers' | 'invoiceSettings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'invoices' | 'orders' | 'products' | 'customers' | 'invoiceSettings' | 'storeSettings'>('dashboard');
   const [unpaidInvoicesCount, setUnpaidInvoicesCount] = useState(0);
   const [alerts, setAlerts] = useState([
     { type: 'warning', message: '2 unpaid invoices.' }
@@ -291,6 +292,8 @@ export default function StoreDashboardPage() {
             <CustomersPage storeName={store.name} />
           ) : activeTab === 'invoiceSettings' ? (
             <InvoiceSettingsPage />
+          ) : activeTab === 'storeSettings' ? (
+            <StoreSettingsPage storeName={store.name} />
           ) : null}
         </div>
       </div>
