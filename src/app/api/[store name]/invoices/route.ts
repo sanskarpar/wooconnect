@@ -153,6 +153,72 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ "sto
     // Wait for all invoice processing to complete
     const invoices = await Promise.all(invoicesPromises);
 
+    // Save invoices to the universalInvoices collection if they don't exist
+    const universalInvoicesCollection = db.collection('universalInvoices');
+    
+    for (const invoice of invoices) {
+      const invoiceKey = `${storeName}-${invoice.number}`;
+      
+      // Check if this invoice already exists in the collection
+      const existingInvoice = await universalInvoicesCollection.findOne({
+        userId: uid,
+        storeName: storeName,
+        storeInvoiceNumber: invoice.number,
+        wooCommerceOrderId: invoice.id
+      });
+      
+      if (!existingInvoice) {
+        // Save new invoice to the collection
+        await universalInvoicesCollection.insertOne({
+          userId: uid,
+          universalNumber: invoice.universalNumber,
+          storeInvoiceNumber: invoice.number,
+          storeName: storeName,
+          wooCommerceOrderId: invoice.id,
+          amount: invoice.amount,
+          status: invoice.status,
+          customerName: invoice.customerName,
+          customerEmail: invoice.customerEmail,
+          createdAt: invoice.createdAt,
+          dueDate: invoice.dueDate,
+          orderStatus: invoice.orderStatus,
+          paymentMethod: invoice.paymentMethod,
+          customerAddress: invoice.customerAddress,
+          items: invoice.items,
+          source: 'woocommerce',
+          savedAt: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
+        });
+        console.log(`Saved new invoice ${invoice.universalNumber} to universalInvoices collection`);
+      } else {
+        // Update existing invoice if status or amount has changed
+        const updateFields: any = {};
+        let hasChanges = false;
+        
+        if (existingInvoice.status !== invoice.status) {
+          updateFields.status = invoice.status;
+          hasChanges = true;
+        }
+        if (existingInvoice.amount !== invoice.amount) {
+          updateFields.amount = invoice.amount;
+          hasChanges = true;
+        }
+        if (existingInvoice.orderStatus !== invoice.orderStatus) {
+          updateFields.orderStatus = invoice.orderStatus;
+          hasChanges = true;
+        }
+        
+        if (hasChanges) {
+          updateFields.lastUpdated = new Date().toISOString();
+          await universalInvoicesCollection.updateOne(
+            { _id: existingInvoice._id },
+            { $set: updateFields }
+          );
+          console.log(`Updated invoice ${invoice.universalNumber} in universalInvoices collection`);
+        }
+      }
+    }
+
     console.log('Processed invoices:', invoices.length);
 
     return NextResponse.json({ invoices }, { status: 200 });

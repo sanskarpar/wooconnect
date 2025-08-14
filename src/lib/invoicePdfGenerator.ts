@@ -29,7 +29,6 @@ export interface InvoiceData {
 
 export interface InvoiceSettings {
   // Basic Info
-  logoUrl: string;
   colorScheme: string;
   accentColor: string;
   
@@ -48,25 +47,8 @@ export interface InvoiceSettings {
   // Invoice Configuration
   invoicePrefix: string;
   invoiceNumberFormat: string;
-  dueDays: number;
   lateFeePercentage: number;
   discountType: 'percentage' | 'fixed';
-  
-  // Layout & Styling
-  fontSize: 'small' | 'medium' | 'large';
-  showLogo: boolean;
-  logoPosition: 'left' | 'center' | 'right';
-  headerHeight: number;
-  showWatermark: boolean;
-  watermarkText: string;
-  watermarkOpacity: number;
-  
-  // Content
-  footerText: string;
-  terms: string;
-  privacyPolicy: string;
-  bankDetails: string;
-  paymentInstructions: string;
   
   // Tax Settings
   defaultTaxRate: number;
@@ -74,7 +56,6 @@ export interface InvoiceSettings {
   taxLabel: string;
   
   // Currency & Formatting
-  currency: string;
   currencySymbol: string;
   dateFormat: string;
   numberFormat: string;
@@ -83,7 +64,6 @@ export interface InvoiceSettings {
   purchaseOrderRef: boolean;
   projectRef: boolean;
   deliveryDate: boolean;
-  notes: string;
   
   // Professional Features
   digitalSignature: string;
@@ -113,7 +93,6 @@ export const generateProfessionalUKInvoicePDF = async (
   // Default German invoice settings matching the actual settings interface
   const s: InvoiceSettings = {
     // Basic Info
-    logoUrl: '',
     colorScheme: settings.colorScheme || '#000000',
     accentColor: settings.accentColor || '#000000',
     
@@ -132,42 +111,23 @@ export const generateProfessionalUKInvoicePDF = async (
     // Invoice Configuration
     invoicePrefix: settings.invoicePrefix || '',
     invoiceNumberFormat: settings.invoiceNumberFormat || '{YYYY} - {###}',
-    dueDays: settings.dueDays || 30,
     lateFeePercentage: settings.lateFeePercentage || 0,
     discountType: settings.discountType || 'percentage',
-    
-    // Layout & Styling
-    fontSize: settings.fontSize || 'medium',
-    showLogo: false,
-    logoPosition: 'left',
-    headerHeight: 50,
-    showWatermark: false,
-    watermarkText: '',
-    watermarkOpacity: 0,
-    
-    // Content
-    footerText: '',
-    terms: '',
-    privacyPolicy: '',
-    bankDetails: '',
-    paymentInstructions: '',
     
     // Tax Settings
     defaultTaxRate: settings.defaultTaxRate || 0,
     showTaxBreakdown: false,
-    taxLabel: 'MwSt.',
+    taxLabel: settings.taxLabel || 'MwSt.',
     
     // Currency & Formatting
-    currency: settings.currency || 'EUR',
     currencySymbol: settings.currencySymbol || '€',
-    dateFormat: 'DD.MM.YYYY',
-    numberFormat: 'DE',
+    dateFormat: settings.dateFormat || 'DD.MM.YYYY',
+    numberFormat: settings.numberFormat || 'DE',
     
     // Additional Fields
     purchaseOrderRef: false,
     projectRef: false,
     deliveryDate: true,
-    notes: '',
     
     // Professional Features
     digitalSignature: settings.digitalSignature || '',
@@ -202,14 +162,8 @@ export const generateProfessionalUKInvoicePDF = async (
   const black = rgb(0, 0, 0);
   const lightGray = rgb(0.93, 0.94, 0.96);
   
-  // Font sizes based on settings
-  // Increase font sizes for better readability
-  const fontSizes = {
-    small: { title: 18, subtitle: 13, normal: 10, small: 9 },
-    medium: { title: 20, subtitle: 15, normal: 12, small: 11 },
-    large: { title: 24, subtitle: 18, normal: 15, small: 13 }
-  };
-  const sizes = fontSizes[s.fontSize];
+  // Font sizes - using small size only
+  const sizes = { title: 18, subtitle: 13, normal: 10, small: 9 };
   
   let yPos = pageHeight - margin - 20;
 
@@ -327,7 +281,7 @@ export const generateProfessionalUKInvoicePDF = async (
     color: accentColor
   });
   yPos -= 20;
-  
+
   // Format dates based on settings
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -341,34 +295,73 @@ export const generateProfessionalUKInvoicePDF = async (
   };
 
   const invoiceDate = formatDate(invoice.createdAt);
-  
-  page.drawText(`Rechnungsdatum: ${invoiceDate}`, {
-    x: margin,
-    y: yPos,
-    size: sizes.normal,
-    font,
-    color: black
-  });
 
-  yPos -= 15;
-  
-  // Delivery date
-  page.drawText(`Lieferdatum: ${invoiceDate}`, {
-    x: margin,
+  // Tabulator alignment for labels and values
+  const labelFont = fontBold;
+  const labelSize = sizes.normal;
+  const valueFont = font;
+  const valueSize = sizes.normal;
+  const labelTexts = [
+    'Rechnungsdatum:',
+    'Lieferdatum:',
+    invoice.paymentMethod ? 'Zahlungsmethode:' : null
+  ].filter(Boolean) as string[];
+  const labelWidths = labelTexts.map(label =>
+    labelFont.widthOfTextAtSize(label, labelSize)
+  );
+  const maxLabelWidth = Math.max(...labelWidths, 120); // fallback min width
+
+  const labelX = margin;
+  const valueX = labelX + maxLabelWidth + 10;
+
+  // Rechnungsdatum
+  page.drawText('Rechnungsdatum:', {
+    x: labelX,
     y: yPos,
-    size: sizes.normal,
-    font,
+    size: labelSize,
+    font: labelFont,
+    color: black
+  });
+  page.drawText(invoiceDate, {
+    x: valueX,
+    y: yPos,
+    size: valueSize,
+    font: valueFont,
     color: black
   });
   yPos -= 15;
-  
-  // Payment method
+
+  // Lieferdatum
+  page.drawText('Lieferdatum:', {
+    x: labelX,
+    y: yPos,
+    size: labelSize,
+    font: labelFont,
+    color: black
+  });
+  page.drawText(invoiceDate, {
+    x: valueX,
+    y: yPos,
+    size: valueSize,
+    font: valueFont,
+    color: black
+  });
+  yPos -= 15;
+
+  // Zahlungsmethode
   if (invoice.paymentMethod) {
-    page.drawText(`Zahlungsmethode: ${invoice.paymentMethod}`, {
-      x: margin,
+    page.drawText('Zahlungsmethode:', {
+      x: labelX,
       y: yPos,
-      size: sizes.normal,
-      font,
+      size: labelSize,
+      font: labelFont,
+      color: black
+    });
+    page.drawText(invoice.paymentMethod, {
+      x: valueX,
+      y: yPos,
+      size: valueSize,
+      font: valueFont,
       color: black
     });
     yPos -= 15;
@@ -450,7 +443,7 @@ export const generateProfessionalUKInvoicePDF = async (
       });
 
       // Unit Price with currency formatting
-      page.drawText(`${item.price.toFixed(2).replace('.', ',')} ${s.currencySymbol}`, {
+      page.drawText(`${s.currencySymbol} ${item.price.toFixed(2).replace('.', ',')}`, {
         x: columns[3].x,
         y: currentY + 8,
         size: sizes.small,
@@ -459,7 +452,7 @@ export const generateProfessionalUKInvoicePDF = async (
       });
 
       // Line Total with currency formatting
-      page.drawText(`${lineTotal.toFixed(2).replace('.', ',')} ${s.currencySymbol}`, {
+      page.drawText(`${s.currencySymbol} ${lineTotal.toFixed(2).replace('.', ',')}`, {
         x: columns[4].x,
         y: currentY + 8,
         size: sizes.small,
@@ -482,7 +475,7 @@ export const generateProfessionalUKInvoicePDF = async (
     color: black
   });
 
-  page.drawText(`${subtotal.toFixed(2).replace('.', ',')} ${s.currencySymbol}`, {
+  page.drawText(`${s.currencySymbol} ${subtotal.toFixed(2).replace('.', ',')}`, {
     x: totalsX + 100,
     y: currentY,
     size: sizes.normal,
@@ -502,7 +495,7 @@ export const generateProfessionalUKInvoicePDF = async (
     color: black
   });
 
-  page.drawText(`${taxAmount.toFixed(2).replace('.', ',')} ${s.currencySymbol}`, {
+  page.drawText(`${s.currencySymbol} ${taxAmount.toFixed(2).replace('.', ',')}`, {
     x: totalsX + 100,
     y: currentY,
     size: sizes.normal,
@@ -523,7 +516,7 @@ export const generateProfessionalUKInvoicePDF = async (
     color: primaryColor
   });
 
-  page.drawText(`${grandTotal.toFixed(2).replace('.', ',')} ${s.currencySymbol}`, {
+  page.drawText(`${s.currencySymbol} ${grandTotal.toFixed(2).replace('.', ',')}`, {
     x: totalsX + 100,
     y: currentY,
     size: sizes.normal,
@@ -584,11 +577,7 @@ export const generateProfessionalUKInvoicePDF = async (
     if (footerText) footerText += '  |  ';
     footerText += s.companyWebsite;
   }
-  // Add custom footer text if provided
-  if (s.footerText) {
-    if (footerText) footerText += '\n';
-    footerText += s.footerText;
-  }
+  // Add custom footer text if provided - removed s.footerText since not in interface
   if (footerText) {
     // Calculate text width for centering
     const textWidth = font.widthOfTextAtSize(footerText, sizes.normal);
@@ -613,20 +602,8 @@ export const downloadInvoicePDF = async (
   storeName?: string
 ) => {
   const pdfBytes = await generateProfessionalUKInvoicePDF(invoice, settings, storeName);
-    // Ensure pdfBytes is backed by a standard ArrayBuffer for Blob constructor
-    const arrayBuffer = pdfBytes.buffer instanceof ArrayBuffer ? pdfBytes.buffer : new Uint8Array(pdfBytes).buffer;
-    const fixedPdfBytes = new Uint8Array(arrayBuffer);
-    const blob = new Blob([fixedPdfBytes], { type: 'application/pdf' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  // Use universal number for filename if available, fallback to regular number
-  const fileNumber = invoice.universalNumber || invoice.number;
-  a.download = `Invoice-${fileNumber}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // Just return the PDF bytes for further processing (e.g., zipping)
+  return pdfBytes;
 };
 
 export const getSampleInvoiceData = (): InvoiceData => ({

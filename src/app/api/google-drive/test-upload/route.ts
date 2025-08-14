@@ -1,0 +1,56 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import { GoogleDriveService } from '@/lib/googleDriveService';
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions) as { user?: { id?: string } };
+    if (!session?.user?.id) {
+      return NextResponse.json({ message: 'Unauthorized. Please log in.' }, { status: 401 });
+    }
+
+    const uid = session.user.id;
+    const config = await GoogleDriveService.getConfigForUser(uid);
+
+    if (!config || !config.accessToken) {
+      return NextResponse.json({ 
+        message: 'Google Drive not connected. Please connect first.' 
+      }, { status: 400 });
+    }
+
+    const driveService = new GoogleDriveService(config, uid);
+    
+    try {
+      const fileLink = await driveService.createTestFile();
+      return NextResponse.json({ 
+        message: 'Test upload successful!',
+        fileName: `WooConnect_Test_${new Date().toISOString().split('T')[0]}.txt`,
+        fileLink 
+      });
+    } catch (error: any) {
+      if (error.code === 401) {
+        // Try to refresh token
+        const refreshed = await driveService.refreshAccessToken(uid);
+        if (refreshed) {
+          const fileLink = await driveService.createTestFile();
+          return NextResponse.json({ 
+            message: 'Test upload successful!',
+            fileName: `WooConnect_Test_${new Date().toISOString().split('T')[0]}.txt`,
+            fileLink 
+          });
+        } else {
+          return NextResponse.json({ 
+            message: 'Google Drive connection expired. Please reconnect.' 
+          }, { status: 401 });
+        }
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error in test upload:', error);
+    return NextResponse.json({ 
+      message: 'Test upload failed. Please check your configuration.' 
+    }, { status: 500 });
+  }
+}
