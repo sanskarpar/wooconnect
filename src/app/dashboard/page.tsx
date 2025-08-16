@@ -97,6 +97,8 @@ export default function DashboardPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [isWooSyncing, setIsWooSyncing] = useState(false);
+  const [wooSyncMessage, setWooSyncMessage] = useState<string | null>(null);
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationMessage, setMigrationMessage] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -196,6 +198,32 @@ export default function DashboardPage() {
     setTimeout(() => setSyncMessage(null), 5000);
   };
 
+  // Sync invoices from WooCommerce into universalInvoices collection
+  const syncWooInvoices = async () => {
+    // Avoid concurrent Woo syncs
+    if (isWooSyncing) return;
+    setIsWooSyncing(true);
+    setWooSyncMessage(null);
+    try {
+      const res = await fetch('/api/sync-invoices', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setWooSyncMessage(`✅ ${data.message}`);
+        // Refresh the universal invoices list after sync
+        await fetchUniversalInvoices();
+      } else {
+        const errorData = await res.json().catch(() => ({ message: 'Unknown error' }));
+        setWooSyncMessage(`❌ Woo sync failed: ${errorData.message}`);
+      }
+    } catch (err) {
+      console.error('Error syncing Woo invoices:', err);
+      setWooSyncMessage('❌ Woo sync failed: Network error');
+    }
+    setIsWooSyncing(false);
+    // Clear message after a short delay
+    setTimeout(() => setWooSyncMessage(null), 5000);
+  };
+
   const downloadAllPDFs = async () => {
     setIsDownloading(true);
     setDownloadMessage(null);
@@ -288,6 +316,8 @@ export default function DashboardPage() {
         setTimeout(() => {
           // Only sync if we're not already syncing and have stores
           if (!isSyncing && stores.length > 0) {
+            // Ensure WooCommerce invoices are synced into the universal collection first
+            syncWooInvoices();
             syncAllInvoices();
           }
         }, 2000); // Increased delay to avoid conflicts
@@ -422,8 +452,10 @@ export default function DashboardPage() {
       setShowConnectForm(false);
       setFormData({ storeName: '', storeUrl: '', consumerKey: '', consumerSecret: '' });
       
-      // Trigger a sync for the new store after a short delay
+      // Trigger a sync for the new store after a short delay: sync WooCommerce orders first so invoices exist,
+      // then run Google Drive sync to upload PDFs if needed.
       setTimeout(() => {
+        syncWooInvoices();
         syncAllInvoices();
       }, 2000);
     } catch (err) {
