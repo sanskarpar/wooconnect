@@ -54,6 +54,7 @@ export interface InvoiceSettings {
   defaultTaxRate: number;
   showTaxBreakdown: boolean;
   taxLabel: string;
+  kleinunternehmerNote: string; // Custom note for Kleinunternehmer regulation
   
   // Currency & Formatting
   currencySymbol: string;
@@ -118,6 +119,7 @@ export const generateProfessionalUKInvoicePDF = async (
     defaultTaxRate: settings.defaultTaxRate || 0,
     showTaxBreakdown: false,
     taxLabel: settings.taxLabel || 'MwSt.',
+    kleinunternehmerNote: settings.kleinunternehmerNote !== undefined ? settings.kleinunternehmerNote : 'Hinweis: Als Kleinunternehmer im Sinne von § 19 Abs. 1 UStG wird Umsatzsteuer nicht berechnet',
     
     // Currency & Formatting
     currencySymbol: settings.currencySymbol || '€',
@@ -253,6 +255,8 @@ export const generateProfessionalUKInvoicePDF = async (
       color: black
     });
     yPos -= 15;
+    // Add two line gaps below customer email
+    yPos -= 30;
   }
 
   // Add gap before invoice section
@@ -561,6 +565,20 @@ export const generateProfessionalUKInvoicePDF = async (
       font: fontBold,
       color: primaryColor
     });
+    currentY -= 30; // Extra gap before Kleinunternehmer note
+    
+    // Kleinunternehmer note below authorized by
+    if (s.kleinunternehmerNote && s.kleinunternehmerNote.trim()) {
+      page.drawText(s.kleinunternehmerNote, {
+        x: margin,
+        y: currentY,
+        size: sizes.small,
+        font,
+        color: black,
+        maxWidth: contentWidth
+      });
+      currentY -= 15;
+    }
   }
 
   // Footer: center-aligned, visually appealing

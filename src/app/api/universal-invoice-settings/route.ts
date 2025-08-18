@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
         defaultTaxRate: 0,
         showTaxBreakdown: false,
         taxLabel: 'Tax',
+        kleinunternehmerNote: 'Hinweis: Als Kleinunternehmer im Sinne von § 19 Abs. 1 UStG wird Umsatzsteuer nicht berechnet',
         
         // Currency & Formatting
         currencySymbol: '€',

@@ -5,10 +5,11 @@ import { useState, useEffect } from 'react';
 import type { jsPDF } from 'jspdf';
 // @ts-ignore
 import type autoTable from 'jspdf-autotable';
-import { CheckCircle, AlertCircle, Store, Settings, Package, ShoppingCart, Users, BarChart3, FileText, Download, Search, Filter, ChevronDown, Plus, RefreshCw, Cloud } from 'lucide-react';
+import { CheckCircle, AlertCircle, Store, Settings, Package, ShoppingCart, Users, BarChart3, FileText, Download, Search, Filter, ChevronDown, Plus, RefreshCw, Cloud, Database } from 'lucide-react';
 import { downloadInvoicePDF, type InvoiceData } from '@/lib/invoicePdfGenerator';
 import UniversalInvoiceSettings from './components/UniversalInvoiceSettings';
 import GoogleDriveSettings from './components/GoogleDriveSettings';
+import DatabaseBackupManager from './components/DatabaseBackupManager';
 import BlacklistManager from './components/BlacklistManager';
 import { applyBlacklistFilter } from '@/lib/blacklistFilter';
 import { BlacklistSettings } from '@/app/api/invoice-blacklist/route';
@@ -74,13 +75,14 @@ export default function DashboardPage() {
   const [settings, setSettings] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'unpaid' | 'overdue'>('all');
-  const [activeTab, setActiveTab] = useState<'invoices' | 'settings' | 'google-drive' | 'blacklist'>('invoices');
+  const [activeTab, setActiveTab] = useState<'invoices' | 'settings' | 'google-drive' | 'database-backup' | 'blacklist'>('invoices');
   const [blacklistSettings, setBlacklistSettings] = useState<BlacklistSettings>({
     enabled: false,
     rules: [],
     logExcludedInvoices: false
   });
   const [excludedInvoicesCount, setExcludedInvoicesCount] = useState(0);
+  const [googleDriveStatus, setGoogleDriveStatus] = useState<{ connected: boolean } | null>(null);
   const [formData, setFormData] = useState({
     storeName: '',
     storeUrl: '',
@@ -169,6 +171,21 @@ export default function DashboardPage() {
       console.error('Error fetching universal invoices:', error);
     }
     setInvoicesLoading(false);
+  };
+
+  const fetchGoogleDriveStatus = async () => {
+    try {
+      const res = await fetch('/api/google-drive/auth-status');
+      if (res.ok) {
+        const data = await res.json();
+        setGoogleDriveStatus({ connected: data.isConnected });
+      } else {
+        setGoogleDriveStatus({ connected: false });
+      }
+    } catch (error) {
+      console.error('Error fetching Google Drive status:', error);
+      setGoogleDriveStatus({ connected: false });
+    }
   };
 
   const syncAllInvoices = async () => {
@@ -293,6 +310,7 @@ export default function DashboardPage() {
     const initData = async () => {
       setLoading(true);
       await fetchStores();
+      await fetchGoogleDriveStatus();
       setLoading(false);
       
       // Run initial sync if there are stores but we want to make sure 
@@ -1034,34 +1052,31 @@ export default function DashboardPage() {
               const storeInvoiceCount = invoices.filter(inv => inv.storeName === store.name).length;
               return (
                 <div key={store.id} className="mb-2">
-                  <button
-                    onClick={() => setSelectedStore(store.name)}
-                    className={`w-full text-left px-2 py-2 rounded-lg transition-colors ${
-                      selectedStore === store.name
-                        ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                        : 'hover:bg-gray-50 text-gray-700'
-                    }`}
-                    style={{ fontSize: '0.95rem' }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-medium truncate">{store.name}</div>
-                        <div className="text-xs text-gray-500 flex items-center">
-                          <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
-                          Connected
-                        </div>
+                  <div className="flex items-center justify-between w-full">
+                    <button
+                      onClick={() => setSelectedStore(store.name)}
+                      className={`flex-1 text-left px-2 py-2 rounded-lg transition-colors ${
+                        selectedStore === store.name
+                          ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                          : 'hover:bg-gray-50 text-gray-700'
+                      }`}
+                      style={{ fontSize: '0.95rem' }}
+                    >
+                      <div className="font-medium truncate">{store.name}</div>
+                      <div className="text-xs text-gray-500 flex items-center">
+                        <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
+                        Connected
                       </div>
-                      <span className="text-xs text-gray-500">{storeInvoiceCount}</span>
-                    </div>
-                  </button>
-                  {/* View Store button below store name */}
-                  <button
-                    onClick={() => window.location.href = `/${encodeURIComponent(store.name)}/dashboard`}
-                    className="w-full text-left px-2 py-1 mt-1 text-blue-600 hover:text-blue-800 text-xs rounded-lg transition-colors"
-                    style={{ fontSize: '0.85rem' }}
-                  >
-                    View Store
-                  </button>
+                    </button>
+                    <span className="text-xs text-gray-500 ml-2">{storeInvoiceCount}</span>
+                    <button
+                      onClick={() => window.location.href = `/${encodeURIComponent(store.name)}/dashboard`}
+                      className="ml-2 px-2 py-1 text-blue-600 hover:text-blue-800 text-xs rounded-lg transition-colors"
+                      style={{ fontSize: '0.85rem' }}
+                    >
+                      View Store
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -1209,6 +1224,19 @@ export default function DashboardPage() {
                 <div className="flex items-center">
                   <Cloud className="h-4 w-4 mr-2" />
                   Google Drive
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('database-backup')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'database-backup'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center">
+                  <Database className="h-4 w-4 mr-2" />
+                  Database Backup
                 </div>
               </button>
               <button
@@ -1469,6 +1497,11 @@ export default function DashboardPage() {
         ) : activeTab === 'google-drive' ? (
           <div className="flex-1 overflow-auto p-6">
             <GoogleDriveSettings />
+          </div>
+        ) : activeTab === 'database-backup' ? (
+          <div className="flex-1 overflow-auto p-6">
+            {/* Debug info */}
+            <DatabaseBackupManager isGoogleDriveConnected={!!googleDriveStatus?.connected} />
           </div>
         ) : (
           <div className="flex-1 overflow-auto p-6">

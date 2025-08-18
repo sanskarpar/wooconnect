@@ -12,9 +12,9 @@ interface GoogleDriveConfig {
 
 export class GoogleDriveService {
   private oauth2Client: any;
-  private drive: any;
+  public drive: any; // Made public for backup service access
   private sheets: any;
-  private config: GoogleDriveConfig;
+  public config: GoogleDriveConfig; // Made public for backup service access
   private userId: string;
 
   constructor(config: GoogleDriveConfig, userId: string) {

@@ -25,6 +25,7 @@ interface UniversalInvoiceSettings {
   // Tax Settings
   defaultTaxRate: number;
   taxLabel: string;
+  kleinunternehmerNote: string;
 
   // Currency & Formatting
   currencySymbol: string;
@@ -61,6 +62,7 @@ const defaultSettings: UniversalInvoiceSettings = {
   // Tax Settings
   defaultTaxRate: 0,
   taxLabel: 'Tax',
+  kleinunternehmerNote: 'Hinweis: Als Kleinunternehmer im Sinne von § 19 Abs. 1 UStG wird Umsatzsteuer nicht berechnet',
 
   // Currency & Formatting
   currencySymbol: '€',
@@ -397,6 +399,23 @@ export default function UniversalInvoiceSettings({ onSettingsUpdate }: Universal
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Tax, VAT, MwSt., etc."
                 />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Kleinunternehmer Note
+                </label>
+                <textarea
+                  name="kleinunternehmerNote"
+                  value={settings.kleinunternehmerNote}
+                  onChange={handleChange}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Hinweis: Als Kleinunternehmer im Sinne von § 19 Abs. 1 UStG wird Umsatzsteuer nicht berechnet"
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  Custom note for small business tax regulation (leave empty to hide)
+                </p>
               </div>
             </div>
           </div>
