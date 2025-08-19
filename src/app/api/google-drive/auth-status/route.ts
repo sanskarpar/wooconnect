@@ -17,9 +17,25 @@ export async function GET(req: NextRequest) {
 
     const config = await googleDriveConfigCollection.findOne({ userId: uid });
 
+    if (!config || !config.accessToken) {
+      return NextResponse.json({
+        isConnected: false,
+        connected: false,
+        connectedAt: null,
+        message: 'Google Drive is not connected.'
+      });
+    }
+
+    // Check if token is expired
+    const now = Date.now();
+    const isExpired = config.tokenExpiryDate && config.tokenExpiryDate < now;
+
     return NextResponse.json({
-      isConnected: !!config?.accessToken,
+      isConnected: !isExpired,
+      connected: !isExpired,
+      expired: isExpired,
       connectedAt: config?.connectedAt || null,
+      message: isExpired ? 'Token expired. Please reconnect.' : 'Google Drive is connected.'
     });
   } catch (error) {
     console.error('Error checking auth status:', error);

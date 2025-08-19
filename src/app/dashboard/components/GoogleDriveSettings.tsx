@@ -72,40 +72,16 @@ export default function GoogleDriveSettings() {
 
   const handleConnectToDrive = async () => {
     try {
-      const res = await fetch('/api/google-drive/auth-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        setMessage({ type: 'error', text: errorData.message || 'Failed to generate auth URL.' });
-        return;
-      }
-
-      const data = await res.json();
-      window.open(data.authUrl, 'google-auth', 'width=500,height=600');
+      // Use NextAuth Google sign-in instead of custom auth flow
+      const { signIn } = await import('next-auth/react');
+      const baseUrl = window.location.origin;
       
-      // Listen for auth completion
-      const checkAuth = setInterval(async () => {
-        try {
-          const statusRes = await fetch('/api/google-drive/auth-status');
-          if (statusRes.ok) {
-            const statusData = await statusRes.json();
-            if (statusData.isConnected) {
-              clearInterval(checkAuth);
-              setConfig(prev => ({ ...prev, isConnected: true }));
-              setMessage({ type: 'success', text: 'Successfully connected to Google Drive!' });
-              fetchGoogleDriveConfig();
-            }
-          }
-        } catch (error) {
-          // Continue checking
-        }
-      }, 2000);
-
-      // Stop checking after 5 minutes
-      setTimeout(() => clearInterval(checkAuth), 300000);
+      // Sign in with Google using NextAuth
+      await signIn('google', {
+        callbackUrl: `${baseUrl}/dashboard`,
+        redirect: true
+      });
+      
     } catch (error) {
       setMessage({ type: 'error', text: 'Network error. Please try again.' });
     }
@@ -274,8 +250,8 @@ export default function GoogleDriveSettings() {
               <div className="flex items-start">
                 <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 mr-3 flex-shrink-0" />
                 <div className="text-sm text-blue-700">
-                  <p className="font-medium mb-2">📌 Server-Side Integration</p>
-                  <p>Google Drive integration is now managed on the server side. Simply connect your Google account below to start automatically uploading invoices to your Google Drive.</p>
+                  <p className="font-medium mb-2">📌 Integrated Google Authentication</p>
+                  <p>Google Drive integration uses your main Google account authentication. Click "Connect to Google Drive" to authorize access to your Google Drive for automatic invoice uploads.</p>
                 </div>
               </div>
             </div>
@@ -283,7 +259,7 @@ export default function GoogleDriveSettings() {
             {!config.isConnected ? (
               <div className="space-y-4">
                 <p className="text-gray-600">
-                  Connect to Google Drive to enable automatic invoice uploads and Google Sheets integration.
+                  Sign in with your Google account to enable automatic invoice uploads and Google Sheets integration.
                 </p>
                 <button
                   onClick={handleConnectToDrive}
