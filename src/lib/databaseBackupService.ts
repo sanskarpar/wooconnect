@@ -423,8 +423,11 @@ export class GlobalBackupManager {
     console.log('🚀 Starting global backup scheduler (every 30 minutes)');
     
     try {
+      // Run initial backup immediately for all connected users
+      console.log('🔄 Running initial backup for all connected users...');
+      await this.performGlobalBackup();
+      
       // Schedule backups every 30 minutes (30 * 60 * 1000 ms)
-      // Don't run initial backup to prevent duplicates
       this.intervalId = setInterval(async () => {
         await this.performGlobalBackup();
       }, 30 * 60 * 1000);
@@ -447,7 +450,7 @@ export class GlobalBackupManager {
     console.log('🛑 Global backup scheduler stopped');
   }
 
-  private async performGlobalBackup(): Promise<void> {
+  async performGlobalBackup(): Promise<void> {
     try {
       console.log('🔄 Starting global backup process...');
       

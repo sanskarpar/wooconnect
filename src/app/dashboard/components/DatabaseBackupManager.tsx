@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Download, RefreshCw, Database, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Download, RefreshCw, Database, Clock, CheckCircle, AlertCircle, Play } from 'lucide-react';
 
 interface BackupItem {
   backupId: string;
@@ -19,6 +19,7 @@ interface BackupManagerProps {
 export default function DatabaseBackupManager({ isGoogleDriveConnected }: BackupManagerProps) {
   const [backups, setBackups] = useState<BackupItem[]>([]);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [creatingBackup, setCreatingBackup] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Debug logging
@@ -77,6 +78,35 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
       setMessage({ type: 'error', text: 'Error restoring backup' });
     } finally {
       setRestoring(null);
+    }
+  };
+
+  const createManualBackup = async () => {
+    setCreatingBackup(true);
+    setMessage(null);
+    
+    try {
+      const response = await fetch('/api/trigger-backup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ type: 'user' }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setMessage({ type: 'success', text: `Manual backup created successfully! Backup ID: ${data.backupId}` });
+        // Reload backups list
+        await loadBackups();
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Failed to create backup' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Error creating backup' });
+    } finally {
+      setCreatingBackup(false);
     }
   };
 
@@ -155,9 +185,23 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
 
       {/* Automatic Backup Info */}
       <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <CheckCircle className="h-5 w-5 text-green-600" />
-          <h3 className="font-medium text-green-800">Automatic Backups Enabled</h3>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+            <h3 className="font-medium text-green-800">Automatic Backups Enabled</h3>
+          </div>
+          <button
+            onClick={createManualBackup}
+            disabled={creatingBackup}
+            className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+          >
+            {creatingBackup ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            {creatingBackup ? 'Creating...' : 'Create Backup Now'}
+          </button>
         </div>
         <div className="flex items-center gap-2 text-green-700">
           <Clock className="h-4 w-4" />
@@ -193,7 +237,7 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
           <div className="text-center py-8 text-gray-500">
             <Database className="h-12 w-12 mx-auto mb-3 opacity-50" />
             <p>No backups available yet.</p>
-            <p className="text-sm">Your first automatic backup will be created within 30 minutes.</p>
+            <p className="text-sm">Your first automatic backup will be created within 30 minutes, or you can create one now using the button above.</p>
           </div>
         ) : (
           <div className="space-y-3">
