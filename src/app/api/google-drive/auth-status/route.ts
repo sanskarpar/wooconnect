@@ -7,7 +7,11 @@ export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions) as { user?: { id?: string } };
     if (!session?.user?.id) {
-      return NextResponse.json({ message: 'Unauthorized. Please log in.' }, { status: 401 });
+      return NextResponse.json({ 
+        isConnected: false,
+        connected: false,
+        message: 'Unauthorized. Please log in.' 
+      }, { status: 401 });
     }
 
     const uid = session.user.id;
@@ -26,9 +30,18 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Check if token is expired
+    // Check if token is expired (be more lenient with expiry)
     const now = Date.now();
-    const isExpired = config.tokenExpiryDate && config.tokenExpiryDate < now;
+    const isExpired = config.tokenExpiryDate && config.tokenExpiryDate < (now - 60000); // 1 minute buffer
+    
+    console.log(`Google Drive status check for user ${uid}:`, {
+      hasAccessToken: !!config.accessToken,
+      hasRefreshToken: !!config.refreshToken,
+      tokenExpiry: config.tokenExpiryDate,
+      currentTime: now,
+      isExpired,
+      connectedAt: config.connectedAt
+    });
 
     return NextResponse.json({
       isConnected: !isExpired,
@@ -39,6 +52,10 @@ export async function GET(req: NextRequest) {
     });
   } catch (error) {
     console.error('Error checking auth status:', error);
-    return NextResponse.json({ message: 'Failed to check authentication status.' }, { status: 500 });
+    return NextResponse.json({ 
+      isConnected: false,
+      connected: false,
+      message: 'Failed to check authentication status.' 
+    }, { status: 500 });
   }
 }

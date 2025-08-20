@@ -465,25 +465,43 @@ export class GlobalBackupManager {
 
       console.log(`👥 Found ${usersWithDrive.length} users with Google Drive configured`);
 
+      let successCount = 0;
+      let failureCount = 0;
+
       for (const userConfig of usersWithDrive) {
         try {
           const userId = userConfig.userId;
           console.log(`🔄 Creating backup for user: ${userId}`);
+          
+          // Check if token is expired and skip if so (but don't fail the entire process)
+          const now = Date.now();
+          const isExpired = userConfig.tokenExpiryDate && userConfig.tokenExpiryDate < (now - 60000);
+          
+          if (isExpired) {
+            console.log(`⏭️ Skipping backup for user ${userId}: Token expired`);
+            continue;
+          }
           
           const backupService = new DatabaseBackupService(userId);
           const result = await backupService.createDatabaseBackup();
           
           if (result.success) {
             console.log(`✅ Backup completed for user ${userId}: ${result.backupId}`);
+            successCount++;
           } else {
             console.error(`❌ Backup failed for user ${userId}: ${result.error}`);
+            failureCount++;
           }
         } catch (error) {
           console.error(`❌ Error backing up user ${userConfig.userId}:`, error);
+          failureCount++;
         }
+        
+        // Add a small delay between users to prevent overwhelming the system
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
-      console.log('✅ Global backup process completed');
+      console.log(`✅ Global backup process completed: ${successCount} successful, ${failureCount} failed`);
     } catch (error) {
       console.error('❌ Error in global backup process:', error);
     }

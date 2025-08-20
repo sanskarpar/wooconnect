@@ -20,6 +20,7 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
   const [backups, setBackups] = useState<BackupItem[]>([]);
   const [restoring, setRestoring] = useState<string | null>(null);
   const [creatingBackup, setCreatingBackup] = useState(false);
+  const [schedulerStatus, setSchedulerStatus] = useState<{ running: boolean; hasInterval: boolean } | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Debug logging
@@ -28,8 +29,21 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
   useEffect(() => {
     if (isGoogleDriveConnected) {
       loadBackups();
+      checkSchedulerStatus();
     }
   }, [isGoogleDriveConnected]);
+
+  const checkSchedulerStatus = async () => {
+    try {
+      const response = await fetch('/api/backup-scheduler-status');
+      if (response.ok) {
+        const data = await response.json();
+        setSchedulerStatus(data.backupScheduler);
+      }
+    } catch (error) {
+      console.error('Error checking scheduler status:', error);
+    }
+  };
 
   const loadBackups = async () => {
     try {
@@ -189,19 +203,53 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
           <div className="flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-green-600" />
             <h3 className="font-medium text-green-800">Automatic Backups Enabled</h3>
-          </div>
-          <button
-            onClick={createManualBackup}
-            disabled={creatingBackup}
-            className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
-          >
-            {creatingBackup ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4" />
+            {schedulerStatus && (
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                schedulerStatus.running 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {schedulerStatus.running ? 'Scheduler Running' : 'Scheduler Stopped'}
+              </span>
             )}
-            {creatingBackup ? 'Creating...' : 'Create Backup Now'}
-          </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={createManualBackup}
+              disabled={creatingBackup}
+              className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+            >
+              {creatingBackup ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4" />
+              )}
+              {creatingBackup ? 'Creating...' : 'Create Backup Now'}
+            </button>
+            {schedulerStatus && !schedulerStatus.running && (
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetch('/api/restart-backup-scheduler', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action: 'restart' })
+                    });
+                    if (response.ok) {
+                      setMessage({ type: 'success', text: 'Backup scheduler restarted' });
+                      await checkSchedulerStatus();
+                    }
+                  } catch (error) {
+                    setMessage({ type: 'error', text: 'Failed to restart scheduler' });
+                  }
+                }}
+                className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2 text-sm"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Restart Scheduler
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 text-green-700">
           <Clock className="h-4 w-4" />

@@ -4,6 +4,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./Providers";
 
+// Import server startup script to initialize backup scheduler
+import '@/lib/serverStartup';
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

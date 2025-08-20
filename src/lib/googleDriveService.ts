@@ -63,33 +63,56 @@ export class GoogleDriveService {
   }
 
   async uploadFile(fileName: string, fileContent: Buffer, mimeType: string): Promise<string> {
-    try {
-      const fileMetadata = {
-        name: fileName,
-        parents: this.config.folderId ? [this.config.folderId] : undefined,
-      };
+    const maxRetries = 3;
+    let lastError: Error | null = null;
 
-      // Convert Buffer to a readable stream
-      const stream = new Readable();
-      stream.push(fileContent);
-      stream.push(null); // End the stream
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Uploading file ${fileName} (attempt ${attempt}/${maxRetries})`);
+        
+        const fileMetadata = {
+          name: fileName,
+          parents: this.config.folderId ? [this.config.folderId] : undefined,
+        };
 
-      const media = {
-        mimeType,
-        body: stream,
-      };
+        // Convert Buffer to a readable stream
+        const stream = new Readable();
+        stream.push(fileContent);
+        stream.push(null); // End the stream
 
-      const response = await this.drive.files.create({
-        requestBody: fileMetadata,
-        media,
-        fields: 'id,name,webViewLink',
-      });
+        const media = {
+          mimeType,
+          body: stream,
+        };
 
-      return response.data.webViewLink || response.data.id;
-    } catch (error) {
-      console.error('Error uploading file to Google Drive:', error);
-      throw error;
+        // Add timeout to the request
+        const response = await Promise.race([
+          this.drive.files.create({
+            requestBody: fileMetadata,
+            media,
+            fields: 'id,name,webViewLink',
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Upload timeout')), 60000) // 60 second timeout
+          )
+        ]) as any;
+
+        console.log(`✅ Successfully uploaded ${fileName}`);
+        return response.data.webViewLink || response.data.id;
+
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error');
+        console.error(`❌ Upload attempt ${attempt} failed for ${fileName}:`, lastError.message);
+        
+        if (attempt < maxRetries) {
+          const delay = Math.pow(2, attempt - 1) * 2000; // 2s, 4s, 8s delays
+          console.log(`Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
     }
+
+    throw new Error(`Failed to upload ${fileName} after ${maxRetries} attempts: ${lastError?.message}`);
   }
 
   async createTestFile(): Promise<string> {
