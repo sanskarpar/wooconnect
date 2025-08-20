@@ -306,6 +306,34 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
               )}
               {creatingBackup ? 'Creating...' : 'Create Backup Now'}
             </button>
+            <button
+              onClick={async () => {
+                try {
+                  const response = await fetch('/api/check-backup-now', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                  });
+                  const data = await response.json();
+                  
+                  if (data.success) {
+                    if (data.wasOverdue) {
+                      setMessage({ type: 'success', text: 'Overdue backup triggered successfully!' });
+                    } else {
+                      setMessage({ type: 'success', text: data.message });
+                    }
+                    await checkSchedulerStatus();
+                  } else {
+                    setMessage({ type: 'error', text: data.error || 'Failed to check backup' });
+                  }
+                } catch (error) {
+                  setMessage({ type: 'error', text: 'Failed to check backup status' });
+                }
+              }}
+              className="px-3 py-1 bg-orange-600 text-white rounded-md hover:bg-orange-700 flex items-center gap-2 text-sm"
+            >
+              <Clock className="h-4 w-4" />
+              Check Backup Now
+            </button>
             {schedulerStatus && !schedulerStatus.running && (
               <button
                 onClick={async () => {
@@ -342,9 +370,16 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
                     Last backup: {new Date(schedulerStatus.backupTiming.lastBackupTime).toLocaleString()}
                   </p>
                 )}
-                {schedulerStatus.backupTiming.nextBackupFormatted && countdown > 0 && (
+                {schedulerStatus.backupTiming.minutesUntilNext !== undefined && (
                   <p className="text-xs text-green-600 font-medium">
-                    Next backup in: {countdown} minute{countdown !== 1 ? 's' : ''} ({schedulerStatus.backupTiming.nextBackupFormatted})
+                    {schedulerStatus.backupTiming.minutesUntilNext === 0 ? (
+                      <span className="text-orange-600">⚡ Backup due now - will run shortly</span>
+                    ) : (
+                      <>Next backup in: {schedulerStatus.backupTiming.minutesUntilNext} minute{schedulerStatus.backupTiming.minutesUntilNext !== 1 ? 's' : ''}</>
+                    )}
+                    {schedulerStatus.backupTiming.nextBackupFormatted && schedulerStatus.backupTiming.minutesUntilNext > 0 && (
+                      <> ({schedulerStatus.backupTiming.nextBackupFormatted})</>
+                    )}
                   </p>
                 )}
               </div>
