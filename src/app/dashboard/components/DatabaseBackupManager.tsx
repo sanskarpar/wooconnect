@@ -20,9 +20,20 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
   const [backups, setBackups] = useState<BackupItem[]>([]);
   const [restoring, setRestoring] = useState<string | null>(null);
   const [creatingBackup, setCreatingBackup] = useState(false);
-  const [schedulerStatus, setSchedulerStatus] = useState<{ running: boolean; hasInterval: boolean } | null>(null);
+  const [schedulerStatus, setSchedulerStatus] = useState<{ 
+    running: boolean; 
+    hasInterval: boolean;
+    backupTiming?: {
+      isRunning: boolean;
+      lastBackupTime: number | null;
+      nextBackupTime: number | null;
+      minutesUntilNext: number;
+      nextBackupFormatted: string | null;
+    };
+  } | null>(null);
   const [localGoogleDriveStatus, setLocalGoogleDriveStatus] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [countdown, setCountdown] = useState(0);
 
   // Use both the prop and local status - if either is true, consider it connected
   const isConnected = isGoogleDriveConnected || localGoogleDriveStatus;
@@ -47,7 +58,17 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
       checkSchedulerStatus();
     }, 15000);
 
-    return () => clearInterval(statusInterval);
+    // Set up countdown timer that updates every minute
+    const countdownInterval = setInterval(() => {
+      if (schedulerStatus?.backupTiming?.minutesUntilNext) {
+        setCountdown(schedulerStatus.backupTiming.minutesUntilNext);
+      }
+    }, 60000); // Update every minute
+
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(countdownInterval);
+    };
   }, []);
 
   // Also check when the prop changes
@@ -81,7 +102,16 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
       const response = await fetch('/api/backup-scheduler-status');
       if (response.ok) {
         const data = await response.json();
-        setSchedulerStatus(data.backupScheduler);
+        setSchedulerStatus({
+          running: data.backupScheduler.running,
+          hasInterval: data.backupScheduler.hasInterval,
+          backupTiming: data.backupTiming
+        });
+        
+        // Update countdown from the latest data
+        if (data.backupTiming?.minutesUntilNext) {
+          setCountdown(data.backupTiming.minutesUntilNext);
+        }
       }
     } catch (error) {
       console.error('Error checking scheduler status:', error);
@@ -303,9 +333,23 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
         </div>
         <div className="flex items-center gap-2 text-green-700">
           <Clock className="h-4 w-4" />
-          <p className="text-sm">
-            Your database is automatically backed up every 30 minutes. The 5 most recent backups are kept, older ones are automatically deleted.
-          </p>
+          <div className="text-sm">
+            <p>Your database is automatically backed up every 30 minutes. The 5 most recent backups are kept, older ones are automatically deleted.</p>
+            {schedulerStatus?.backupTiming && (
+              <div className="mt-2 space-y-1">
+                {schedulerStatus.backupTiming.lastBackupTime && (
+                  <p className="text-xs text-green-600">
+                    Last backup: {new Date(schedulerStatus.backupTiming.lastBackupTime).toLocaleString()}
+                  </p>
+                )}
+                {schedulerStatus.backupTiming.nextBackupFormatted && countdown > 0 && (
+                  <p className="text-xs text-green-600 font-medium">
+                    Next backup in: {countdown} minute{countdown !== 1 ? 's' : ''} ({schedulerStatus.backupTiming.nextBackupFormatted})
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

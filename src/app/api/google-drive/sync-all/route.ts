@@ -70,43 +70,65 @@ export async function POST(req: NextRequest) {
     const refreshedInvoices = await universalInvoicesCollection.find({ userId: uid }).toArray();
     console.log(`📊 Refreshed ${refreshedInvoices.length} invoices with reset upload status`);
 
-    // Step 4: Process each invoice
+    // Step 4: Process each invoice in smaller batches to prevent timeouts
     let uploadedCount = 0;
     let errorCount = 0;
     const errors = [];
+    const batchSize = 5; // Process 5 invoices at a time
+    const totalInvoices = refreshedInvoices.length;
 
-    console.log(`🚀 STEP 4: Starting upload process for ${refreshedInvoices.length} invoices`);
+    console.log(`🚀 STEP 4: Starting upload process for ${totalInvoices} invoices in batches of ${batchSize}`);
 
-    for (const invoice of refreshedInvoices) {
-      try {
-        console.log(`📄 Processing invoice: ${invoice.universalNumber}`);
-        
-        // Upload the invoice to Google Drive
-        const driveLink = await uploadNewInvoiceToDrive(uid, invoice, db);
-        
-        if (driveLink) {
-          uploadedCount++;
-          console.log(`✅ Successfully uploaded: ${invoice.universalNumber}`);
-        } else {
-          console.log(`⚠️ Failed to upload: ${invoice.universalNumber}`);
-        }
-      } catch (error) {
-        errorCount++;
-        const errorMsg = `Failed to upload ${invoice.universalNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        console.error(`❌ ${errorMsg}`);
-        errors.push(errorMsg);
-      }
-    }
-
-    console.log(`🎉 SYNC ALL COMPLETE: ${uploadedCount} uploaded, ${errorCount} errors`);
-
-    return NextResponse.json({
-      message: `Sync completed! Cleaned up existing files and uploaded ${uploadedCount} invoices successfully.`,
-      uploadedCount,
-      errorCount,
-      totalProcessed: refreshedInvoices.length,
-      errors: errors.slice(0, 5) // Only return first 5 errors
+    // Send immediate response to prevent timeout, then process in background
+    const response = NextResponse.json({
+      message: `Sync started! Processing ${totalInvoices} invoices in batches. Check back in a few minutes.`,
+      totalInvoices,
+      status: 'processing'
     });
+
+    // Process invoices in background (don't await this)
+    setImmediate(async () => {
+      for (let i = 0; i < refreshedInvoices.length; i += batchSize) {
+        const batch = refreshedInvoices.slice(i, i + batchSize);
+        console.log(`📦 Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(totalInvoices/batchSize)} (${batch.length} invoices)`);
+        
+        for (const invoice of batch) {
+          try {
+            console.log(`📄 Processing invoice: ${invoice.universalNumber}`);
+            
+            // Upload the invoice to Google Drive with timeout
+            const uploadPromise = uploadNewInvoiceToDrive(uid, invoice, db);
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Upload timeout')), 30000)
+            );
+            
+            const driveLink = await Promise.race([uploadPromise, timeoutPromise]);
+            
+            if (driveLink) {
+              uploadedCount++;
+              console.log(`✅ Successfully uploaded: ${invoice.universalNumber}`);
+            } else {
+              console.log(`⚠️ Failed to upload: ${invoice.universalNumber}`);
+              errorCount++;
+            }
+          } catch (error) {
+            errorCount++;
+            const errorMsg = `Failed to upload ${invoice.universalNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            console.error(`❌ ${errorMsg}`);
+            errors.push(errorMsg);
+          }
+        }
+        
+        // Add delay between batches to prevent overwhelming the API
+        if (i + batchSize < refreshedInvoices.length) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+      
+      console.log(`🎉 BACKGROUND SYNC COMPLETE: ${uploadedCount} uploaded, ${errorCount} errors`);
+    });
+
+    return response;
 
   } catch (error) {
     console.error('Error in sync-all endpoint:', error);

@@ -398,6 +398,9 @@ export class GlobalBackupManager {
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
   private isInitializing = false;
+  private lastBackupTime: number | null = null;
+  private nextBackupTime: number | null = null;
+  private readonly BACKUP_INTERVAL = 30 * 60 * 1000; // 30 minutes in milliseconds
 
   private constructor() {}
 
@@ -427,13 +430,20 @@ export class GlobalBackupManager {
       console.log('🔄 Running initial backup for all connected users...');
       await this.performGlobalBackup();
       
-      // Schedule backups every 30 minutes (30 * 60 * 1000 ms)
+      // Set the next backup time
+      this.lastBackupTime = Date.now();
+      this.nextBackupTime = this.lastBackupTime + this.BACKUP_INTERVAL;
+      
+      // Schedule backups every 30 minutes
       this.intervalId = setInterval(async () => {
         await this.performGlobalBackup();
-      }, 30 * 60 * 1000);
+        this.lastBackupTime = Date.now();
+        this.nextBackupTime = this.lastBackupTime + this.BACKUP_INTERVAL;
+      }, this.BACKUP_INTERVAL);
       
       this.isRunning = true;
       console.log('✅ Global backup scheduler started successfully');
+      console.log(`📅 Next backup scheduled for: ${new Date(this.nextBackupTime).toLocaleString()}`);
     } catch (error) {
       console.error('Error starting backup scheduler:', error);
     } finally {
@@ -448,6 +458,25 @@ export class GlobalBackupManager {
     }
     this.isRunning = false;
     console.log('🛑 Global backup scheduler stopped');
+  }
+
+  // Method to get the time until next backup (in minutes)
+  getTimeUntilNextBackup(): number {
+    if (!this.nextBackupTime) return 0;
+    const now = Date.now();
+    const timeLeft = this.nextBackupTime - now;
+    return Math.max(0, Math.ceil(timeLeft / (60 * 1000))); // Convert to minutes
+  }
+
+  // Method to get backup status info
+  getBackupStatus() {
+    return {
+      isRunning: this.isRunning,
+      lastBackupTime: this.lastBackupTime,
+      nextBackupTime: this.nextBackupTime,
+      minutesUntilNext: this.getTimeUntilNextBackup(),
+      nextBackupFormatted: this.nextBackupTime ? new Date(this.nextBackupTime).toLocaleString() : null
+    };
   }
 
   async performGlobalBackup(): Promise<void> {
@@ -515,3 +544,6 @@ export class GlobalBackupManager {
     };
   }
 }
+
+// Create a single instance that will be shared across the application
+export const globalBackupManager = GlobalBackupManager.getInstance();

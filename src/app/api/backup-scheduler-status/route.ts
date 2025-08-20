@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
-import { GlobalBackupManager } from '@/lib/databaseBackupService';
+import { GlobalBackupManager, globalBackupManager } from '@/lib/databaseBackupService';
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
 
     const backupManager = GlobalBackupManager.getInstance();
     const status = backupManager.getStatus();
+    const backupStatus = globalBackupManager.getBackupStatus();
 
     return NextResponse.json({
       authenticated: true,
@@ -24,6 +25,13 @@ export async function GET(req: NextRequest) {
         running: status.running,
         hasInterval: status.intervalId,
         initializing: status.initializing
+      },
+      backupTiming: {
+        isRunning: backupStatus.isRunning,
+        lastBackupTime: backupStatus.lastBackupTime,
+        nextBackupTime: backupStatus.nextBackupTime,
+        minutesUntilNext: backupStatus.minutesUntilNext,
+        nextBackupFormatted: backupStatus.nextBackupFormatted
       },
       timestamp: new Date().toISOString()
     });
