@@ -541,10 +541,9 @@ export class GlobalBackupManager {
     const nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL; // Simple: last backup + 30 minutes
     const timeLeft = nextBackupTime - now;
     
-    if (timeLeft <= 60000) { // If less than 1 minute left, consider it due now
-      // Time has passed or almost passed, should backup now
-      console.log('⚡ Backup is due now or very soon');
-      return 0;
+    if (timeLeft <= 0) { // If time has passed, backup is due now but schedule it shortly
+      console.log('⚡ Backup is overdue - scheduling immediately');
+      return 1; // Return 1 minute instead of 0 to avoid confusion in UI
     }
     
     const minutesLeft = Math.ceil(timeLeft / (60 * 1000)); // Convert to minutes, always round up
@@ -563,18 +562,31 @@ export class GlobalBackupManager {
       nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL;
       // If next backup time is in the past, it means backup is overdue
       if (nextBackupTime <= now) {
-        nextBackupTime = now; // Should backup now
+        nextBackupTime = now + (1 * 60 * 1000); // Schedule a backup in 1 minute from now
       }
     }
     
     const minutesUntilNext = await this.getTimeUntilNextBackup();
+    
+    // Make sure the formatted time is calculated from the proper nextBackupTime
+    const nextBackupFormatted = nextBackupTime 
+      ? new Date(nextBackupTime).toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        })
+      : null;
     
     return {
       isRunning: this.isRunning,
       lastBackupTime: lastBackupTime,
       nextBackupTime: nextBackupTime,
       minutesUntilNext: minutesUntilNext,
-      nextBackupFormatted: nextBackupTime ? new Date(nextBackupTime).toLocaleString() : null
+      nextBackupFormatted: nextBackupFormatted
     };
   }
 
