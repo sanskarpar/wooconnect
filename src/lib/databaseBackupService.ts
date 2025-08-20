@@ -400,7 +400,7 @@ export class GlobalBackupManager {
   private isInitializing = false;
   private lastBackupTime: number | null = null;
   private nextBackupTime: number | null = null;
-  private readonly BACKUP_INTERVAL = 30 * 60 * 1000; // 30 minutes in milliseconds
+  public readonly BACKUP_INTERVAL = 30 * 60 * 1000; // 30 minutes in milliseconds
 
   private constructor() {}
 
@@ -430,15 +430,20 @@ export class GlobalBackupManager {
       console.log('🔄 Running initial backup for all connected users...');
       await this.performGlobalBackup();
       
-      // Set the next backup time
+      // Set timing after successful backup
       this.lastBackupTime = Date.now();
       this.nextBackupTime = this.lastBackupTime + this.BACKUP_INTERVAL;
       
       // Schedule backups every 30 minutes
       this.intervalId = setInterval(async () => {
+        console.log('🔄 Starting scheduled backup...');
         await this.performGlobalBackup();
+        
+        // Update timing only after backup completes
         this.lastBackupTime = Date.now();
         this.nextBackupTime = this.lastBackupTime + this.BACKUP_INTERVAL;
+        
+        console.log(`📅 Next backup scheduled for: ${new Date(this.nextBackupTime).toLocaleString()}`);
       }, this.BACKUP_INTERVAL);
       
       this.isRunning = true;
@@ -462,19 +467,34 @@ export class GlobalBackupManager {
 
   // Method to get the time until next backup (in minutes)
   getTimeUntilNextBackup(): number {
-    if (!this.nextBackupTime) return 0;
+    if (!this.nextBackupTime || !this.lastBackupTime) {
+      // If we don't have proper timing set, assume next backup is soon
+      return 0;
+    }
+    
     const now = Date.now();
     const timeLeft = this.nextBackupTime - now;
-    return Math.max(0, Math.ceil(timeLeft / (60 * 1000))); // Convert to minutes
+    
+    // If next backup time is in the past, recalculate it
+    if (timeLeft <= 0) {
+      console.warn('⚠️ Next backup time is in the past, recalculating...');
+      this.nextBackupTime = this.lastBackupTime + this.BACKUP_INTERVAL;
+      const newTimeLeft = this.nextBackupTime - now;
+      return Math.max(0, Math.ceil(newTimeLeft / (60 * 1000)));
+    }
+    
+    return Math.ceil(timeLeft / (60 * 1000)); // Convert to minutes, always round up
   }
 
   // Method to get backup status info
   getBackupStatus() {
+    const minutesUntilNext = this.getTimeUntilNextBackup();
+    
     return {
       isRunning: this.isRunning,
       lastBackupTime: this.lastBackupTime,
       nextBackupTime: this.nextBackupTime,
-      minutesUntilNext: this.getTimeUntilNextBackup(),
+      minutesUntilNext: minutesUntilNext,
       nextBackupFormatted: this.nextBackupTime ? new Date(this.nextBackupTime).toLocaleString() : null
     };
   }
