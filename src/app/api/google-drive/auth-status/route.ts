@@ -21,7 +21,16 @@ export async function GET(req: NextRequest) {
 
     const config = await googleDriveConfigCollection.findOne({ userId: uid });
 
+    console.log(`Google Drive config check for user ${uid}:`, {
+      hasConfig: !!config,
+      hasAccessToken: !!config?.accessToken,
+      hasRefreshToken: !!config?.refreshToken,
+      tokenExpiry: config?.tokenExpiryDate,
+      connectedAt: config?.connectedAt
+    });
+
     if (!config || !config.accessToken) {
+      console.log(`❌ No Google Drive config or access token for user ${uid}`);
       return NextResponse.json({
         isConnected: false,
         connected: false,
@@ -32,7 +41,7 @@ export async function GET(req: NextRequest) {
 
     // Check if token is expired (be more lenient with expiry)
     const now = Date.now();
-    const isExpired = config.tokenExpiryDate && config.tokenExpiryDate < (now - 60000); // 1 minute buffer
+    const isExpired = config.tokenExpiryDate && config.tokenExpiryDate < (now - 300000); // 5 minute buffer
     
     console.log(`Google Drive status check for user ${uid}:`, {
       hasAccessToken: !!config.accessToken,
@@ -43,12 +52,16 @@ export async function GET(req: NextRequest) {
       connectedAt: config.connectedAt
     });
 
+    // Even if token is expired, if we have a refresh token, consider it connected
+    const isConnected = !isExpired || !!config.refreshToken;
+
     return NextResponse.json({
-      isConnected: !isExpired,
-      connected: !isExpired,
+      isConnected,
+      connected: isConnected,
       expired: isExpired,
+      hasRefreshToken: !!config.refreshToken,
       connectedAt: config?.connectedAt || null,
-      message: isExpired ? 'Token expired. Please reconnect.' : 'Google Drive is connected.'
+      message: isExpired ? (config.refreshToken ? 'Token expired but can be refreshed' : 'Token expired. Please reconnect.') : 'Google Drive is connected.'
     });
   } catch (error) {
     console.error('Error checking auth status:', error);

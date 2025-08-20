@@ -175,11 +175,14 @@ export default function DashboardPage() {
 
   const fetchGoogleDriveStatus = async () => {
     try {
+      console.log('🔍 Fetching Google Drive status...');
       const res = await fetch('/api/google-drive/auth-status');
       if (res.ok) {
         const data = await res.json();
-        setGoogleDriveStatus({ connected: data.isConnected });
+        console.log('📊 Google Drive status response:', data);
+        setGoogleDriveStatus({ connected: data.isConnected || data.connected });
       } else {
+        console.log('❌ Google Drive status request failed:', res.status);
         setGoogleDriveStatus({ connected: false });
       }
     } catch (error) {
@@ -320,7 +323,22 @@ export default function DashboardPage() {
       }, 500);
     };
     initData();
+
+    // Set up periodic Google Drive status checking every 30 seconds
+    const statusInterval = setInterval(() => {
+      fetchGoogleDriveStatus();
+    }, 30000);
+
+    return () => clearInterval(statusInterval);
   }, []);
+
+  // Refresh Google Drive status when switching to database-backup tab
+  useEffect(() => {
+    if (activeTab === 'database-backup' || activeTab === 'google-drive') {
+      console.log(`🔄 Tab switched to ${activeTab}, refreshing Google Drive status...`);
+      fetchGoogleDriveStatus();
+    }
+  }, [activeTab]);
 
   // Fetch invoices when stores change and run sync if needed
   useEffect(() => {

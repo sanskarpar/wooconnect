@@ -21,17 +21,60 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
   const [restoring, setRestoring] = useState<string | null>(null);
   const [creatingBackup, setCreatingBackup] = useState(false);
   const [schedulerStatus, setSchedulerStatus] = useState<{ running: boolean; hasInterval: boolean } | null>(null);
+  const [localGoogleDriveStatus, setLocalGoogleDriveStatus] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Use both the prop and local status - if either is true, consider it connected
+  const isConnected = isGoogleDriveConnected || localGoogleDriveStatus;
 
   // Debug logging
   console.log('DatabaseBackupManager - isGoogleDriveConnected:', isGoogleDriveConnected);
+  console.log('DatabaseBackupManager - localGoogleDriveStatus:', localGoogleDriveStatus);
+  console.log('DatabaseBackupManager - isConnected:', isConnected);
 
   useEffect(() => {
-    if (isGoogleDriveConnected) {
+    // Always check status when component mounts
+    checkGoogleDriveStatus();
+    checkSchedulerStatus();
+    
+    if (isConnected) {
       loadBackups();
+    }
+
+    // Set up periodic status checking every 15 seconds
+    const statusInterval = setInterval(() => {
+      checkGoogleDriveStatus();
       checkSchedulerStatus();
+    }, 15000);
+
+    return () => clearInterval(statusInterval);
+  }, []);
+
+  // Also check when the prop changes
+  useEffect(() => {
+    if (isGoogleDriveConnected) {
+      checkGoogleDriveStatus();
+      loadBackups();
     }
   }, [isGoogleDriveConnected]);
+
+  const checkGoogleDriveStatus = async () => {
+    try {
+      console.log('🔍 DatabaseBackupManager: Checking Google Drive status...');
+      const response = await fetch('/api/google-drive/auth-status');
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📊 DatabaseBackupManager: Google Drive status response:', data);
+        setLocalGoogleDriveStatus(data.isConnected || data.connected || false);
+      } else {
+        console.log('❌ DatabaseBackupManager: Google Drive status request failed:', response.status);
+        setLocalGoogleDriveStatus(false);
+      }
+    } catch (error) {
+      console.error('DatabaseBackupManager: Error checking Google Drive status:', error);
+      setLocalGoogleDriveStatus(false);
+    }
+  };
 
   const checkSchedulerStatus = async () => {
     try {
@@ -112,8 +155,9 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
       
       if (response.ok) {
         setMessage({ type: 'success', text: `Manual backup created successfully! Backup ID: ${data.backupId}` });
-        // Reload backups list
+        // Reload backups list and refresh Google Drive status
         await loadBackups();
+        await checkGoogleDriveStatus();
       } else {
         setMessage({ type: 'error', text: data.message || 'Failed to create backup' });
       }
@@ -128,7 +172,7 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
     return new Date(dateString).toLocaleString();
   };
 
-  if (!isGoogleDriveConnected) {
+  if (!isConnected) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex items-center gap-3 mb-4">
@@ -144,45 +188,51 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
             </p>
           </div>
           
-          {/* Debug info in development */}
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mt-3 p-2 bg-yellow-100 text-xs text-yellow-800">
+          {/* Status debugging and refresh - always show */}
+          <div className="mt-3 p-2 bg-yellow-100 text-xs text-yellow-800">
+            <p>Status Check: Prop={isGoogleDriveConnected ? 'Connected' : 'Not Connected'}, Local={localGoogleDriveStatus ? 'Connected' : 'Not Connected'}</p>
+            <div className="mt-2 flex gap-2">
               <button 
-                onClick={async () => {
-                  try {
-                    const res = await fetch('/api/backup-status');
-                    const data = await res.json();
-                    console.log('Backup status API response:', data);
-                    
-                    const driveRes = await fetch('/api/google-drive/auth-status');
-                    const driveData = await driveRes.json();
-                    console.log('Google Drive status API response:', driveData);
-                  } catch (error) {
-                    console.error('Error testing APIs:', error);
-                  }
-                }}
-                className="mt-1 px-2 py-1 bg-yellow-200 text-yellow-800 rounded text-xs mr-2"
+                onClick={checkGoogleDriveStatus}
+                className="px-2 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
               >
-                Test APIs
+                Refresh Status
               </button>
-              
               <button 
                 onClick={async () => {
                   try {
-                    const res = await fetch('/api/debug-collections');
+                    const res = await fetch('/api/refresh-drive-status', { method: 'POST' });
                     const data = await res.json();
-                    console.log('Collections debug data:', data);
-                    alert('Check console for collection debug data');
+                    console.log('🔄 Refresh drive status response:', data);
+                    if (data.success) {
+                      setLocalGoogleDriveStatus(true);
+                      setMessage({ type: 'success', text: 'Connection status refreshed' });
+                    }
                   } catch (error) {
-                    console.error('Error debugging collections:', error);
+                    console.error('Error refreshing drive status:', error);
                   }
                 }}
-                className="mt-1 px-2 py-1 bg-blue-200 text-blue-800 rounded text-xs"
+                className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
               >
-                Debug Collections
+                Force Refresh
+              </button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/debug-connection');
+                    const data = await res.json();
+                    console.log('🔍 Connection debug data:', data);
+                    alert('Check console for detailed connection info');
+                  } catch (error) {
+                    console.error('Error getting debug info:', error);
+                  }
+                }}
+                className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+              >
+                Debug Connection
               </button>
             </div>
-          )}
+          </div>
         </div>
       </div>
     );
