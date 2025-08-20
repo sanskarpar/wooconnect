@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
     const backupManager = GlobalBackupManager.getInstance();
     const status = backupManager.getStatus();
-    const backupStatus = globalBackupManager.getBackupStatus();
+    const backupStatus = await globalBackupManager.getBackupStatus();
 
     // Debug logging for timing issues
     console.log('🐛 Backup Status Debug:', {

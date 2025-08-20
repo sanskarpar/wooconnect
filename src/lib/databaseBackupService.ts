@@ -398,8 +398,6 @@ export class GlobalBackupManager {
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
   private isInitializing = false;
-  private lastBackupTime: number | null = null;
-  private nextBackupTime: number | null = null;
   public readonly BACKUP_INTERVAL = 30 * 60 * 1000; // 30 minutes in milliseconds
 
   private constructor() {}
@@ -426,29 +424,35 @@ export class GlobalBackupManager {
     console.log('🚀 Starting global backup scheduler (every 30 minutes)');
     
     try {
-      // Run initial backup immediately for all connected users
-      console.log('🔄 Running initial backup for all connected users...');
-      await this.performGlobalBackup();
+      // Check if we need to do an immediate backup
+      const minutesUntilNext = await this.getTimeUntilNextBackup();
       
-      // Set timing after successful backup
-      this.lastBackupTime = Date.now();
-      this.nextBackupTime = this.lastBackupTime + this.BACKUP_INTERVAL;
-      
-      // Schedule backups every 30 minutes
-      this.intervalId = setInterval(async () => {
-        console.log('🔄 Starting scheduled backup...');
+      if (minutesUntilNext === 0) {
+        console.log('🔄 Running immediate backup (time has elapsed)...');
         await this.performGlobalBackup();
+      } else {
+        console.log(`⏱️ Next backup due in ${minutesUntilNext} minutes`);
+      }
+      
+      // Schedule backups to check every 5 minutes and backup when time is reached
+      this.intervalId = setInterval(async () => {
+        const minutesLeft = await this.getTimeUntilNextBackup();
         
-        // Update timing only after backup completes
-        this.lastBackupTime = Date.now();
-        this.nextBackupTime = this.lastBackupTime + this.BACKUP_INTERVAL;
-        
-        console.log(`📅 Next backup scheduled for: ${new Date(this.nextBackupTime).toLocaleString()}`);
-      }, this.BACKUP_INTERVAL);
+        if (minutesLeft === 0) {
+          console.log('🔄 Starting scheduled backup (30 minutes elapsed)...');
+          await this.performGlobalBackup();
+        } else {
+          console.log(`⏰ Next backup in ${minutesLeft} minutes`);
+        }
+      }, 5 * 60 * 1000); // Check every 5 minutes
       
       this.isRunning = true;
       console.log('✅ Global backup scheduler started successfully');
-      console.log(`📅 Next backup scheduled for: ${new Date(this.nextBackupTime).toLocaleString()}`);
+      
+      const status = await this.getBackupStatus();
+      if (status.nextBackupFormatted) {
+        console.log(`📅 Next backup scheduled for: ${status.nextBackupFormatted}`);
+      }
     } catch (error) {
       console.error('Error starting backup scheduler:', error);
     } finally {
@@ -465,37 +469,77 @@ export class GlobalBackupManager {
     console.log('🛑 Global backup scheduler stopped');
   }
 
+  // Method to get the actual last backup time from Google Drive
+  async getLastBackupTimeFromDrive(): Promise<number | null> {
+    try {
+      const client = await clientPromise;
+      const db = client.db('wooconnect');
+      
+      // Get all users with Google Drive configured
+      const googleDriveConfigs = await db.collection('googleDriveConfig').find({}).toArray();
+      
+      if (googleDriveConfigs.length === 0) {
+        return null;
+      }
+      
+      let latestBackupTime: number | null = null;
+      
+      // Check each user's backups to find the most recent one
+      for (const config of googleDriveConfigs) {
+        const backups = await db.collection('databaseBackups')
+          .find({ userId: config.userId })
+          .sort({ createdAt: -1 })
+          .limit(1)
+          .toArray();
+        
+        if (backups.length > 0) {
+          const backupTime = new Date(backups[0].createdAt).getTime();
+          if (!latestBackupTime || backupTime > latestBackupTime) {
+            latestBackupTime = backupTime;
+          }
+        }
+      }
+      
+      return latestBackupTime;
+    } catch (error) {
+      console.error('Error getting last backup time from drive:', error);
+      return null;
+    }
+  }
+
   // Method to get the time until next backup (in minutes)
-  getTimeUntilNextBackup(): number {
-    if (!this.nextBackupTime || !this.lastBackupTime) {
-      // If we don't have proper timing set, assume next backup is soon
+  async getTimeUntilNextBackup(): Promise<number> {
+    const lastBackupTime = await this.getLastBackupTimeFromDrive();
+    
+    if (!lastBackupTime) {
+      // No backups exist, should backup now
       return 0;
     }
     
     const now = Date.now();
-    const timeLeft = this.nextBackupTime - now;
+    const nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL;
+    const timeLeft = nextBackupTime - now;
     
-    // If next backup time is in the past, recalculate it
     if (timeLeft <= 0) {
-      console.warn('⚠️ Next backup time is in the past, recalculating...');
-      this.nextBackupTime = this.lastBackupTime + this.BACKUP_INTERVAL;
-      const newTimeLeft = this.nextBackupTime - now;
-      return Math.max(0, Math.ceil(newTimeLeft / (60 * 1000)));
+      // Time has passed, should backup now
+      return 0;
     }
     
     return Math.ceil(timeLeft / (60 * 1000)); // Convert to minutes, always round up
   }
 
   // Method to get backup status info
-  getBackupStatus() {
-    const minutesUntilNext = this.getTimeUntilNextBackup();
+  async getBackupStatus() {
+    const lastBackupTime = await this.getLastBackupTimeFromDrive();
+    const nextBackupTime = lastBackupTime ? lastBackupTime + this.BACKUP_INTERVAL : null;
+    const minutesUntilNext = await this.getTimeUntilNextBackup();
     
     return {
       isRunning: this.isRunning,
-      lastBackupTime: this.lastBackupTime,
-      nextBackupTime: this.nextBackupTime,
+      lastBackupTime: lastBackupTime,
+      nextBackupTime: nextBackupTime,
       minutesUntilNext: minutesUntilNext,
-      nextBackupFormatted: this.nextBackupTime ? new Date(this.nextBackupTime).toLocaleString() : null
+      nextBackupFormatted: nextBackupTime ? new Date(nextBackupTime).toLocaleString() : null
     };
   }
 

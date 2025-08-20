@@ -3,7 +3,7 @@ import { globalBackupManager } from '@/lib/databaseBackupService';
 
 export async function GET() {
   try {
-    const status = globalBackupManager.getBackupStatus();
+    const status = await globalBackupManager.getBackupStatus();
     const now = Date.now();
     
     const debugInfo = {
@@ -33,7 +33,8 @@ export async function GET() {
       calculations: {
         timeSinceLastBackup: status.lastBackupTime ? now - status.lastBackupTime : null,
         timeUntilNextBackup: status.nextBackupTime ? status.nextBackupTime - now : null,
-        shouldBackupBe: status.lastBackupTime ? status.lastBackupTime + globalBackupManager.BACKUP_INTERVAL : null
+        shouldBackupBe: status.lastBackupTime ? status.lastBackupTime + globalBackupManager.BACKUP_INTERVAL : null,
+        shouldBackupBeFormatted: status.lastBackupTime ? new Date(status.lastBackupTime + globalBackupManager.BACKUP_INTERVAL).toLocaleString() : null
       }
     };
     
