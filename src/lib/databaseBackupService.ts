@@ -421,43 +421,41 @@ export class GlobalBackupManager {
     }
 
     this.isInitializing = true;
-    console.log('🚀 Starting global backup scheduler (every 30 minutes)');
+    console.log('🚀 Starting global backup scheduler (checks every 2 minutes, backs up every 30 minutes)');
     
     try {
       // Check if we need to do an immediate backup
-      const minutesUntilNext = await this.getTimeUntilNextBackup();
+      const needsBackup = await this.isBackupNeeded();
       
-      if (minutesUntilNext === 0) {
+      if (needsBackup) {
         console.log('🔄 Running immediate backup (time has elapsed)...');
         await this.performGlobalBackup();
       } else {
-        console.log(`⏱️ Next backup due in ${minutesUntilNext} minutes`);
+        const minutesLeft = await this.getTimeUntilNextBackup();
+        console.log(`⏱️ Next backup due in ${minutesLeft} minutes`);
       }
       
-      // Schedule backups to check every 2 minutes and backup when time is reached
+      // Schedule backups to check every 2 minutes
       this.intervalId = setInterval(async () => {
         try {
-          const minutesLeft = await this.getTimeUntilNextBackup();
+          const needsBackupNow = await this.isBackupNeeded();
           
-          if (minutesLeft === 0) {
-            console.log('🔄 AUTO: Starting scheduled backup (30 minutes elapsed)...');
+          if (needsBackupNow) {
+            console.log('🔄 AUTO: 30 minutes elapsed - starting automatic backup...');
             await this.performGlobalBackup();
-            console.log('✅ AUTO: Scheduled backup completed successfully');
+            console.log('✅ AUTO: Automatic backup completed successfully');
           } else {
+            const minutesLeft = await this.getTimeUntilNextBackup();
             console.log(`⏰ AUTO: Next backup in ${minutesLeft} minutes`);
           }
         } catch (error) {
-          console.error('❌ Error in scheduled backup check:', error);
+          console.error('❌ Error in automatic backup check:', error);
         }
-      }, 2 * 60 * 1000); // Check every 2 minutes for more responsive scheduling
+      }, 2 * 60 * 1000); // Check every 2 minutes
       
       this.isRunning = true;
       console.log('✅ Global backup scheduler started successfully');
       
-      const status = await this.getBackupStatus();
-      if (status.nextBackupFormatted) {
-        console.log(`📅 Next backup scheduled for: ${status.nextBackupFormatted}`);
-      }
     } catch (error) {
       console.error('Error starting backup scheduler:', error);
     } finally {
@@ -480,36 +478,46 @@ export class GlobalBackupManager {
       const client = await clientPromise;
       const db = client.db('wooconnect');
       
-      // Get all users with Google Drive configured
-      const googleDriveConfigs = await db.collection('googleDriveConfig').find({}).toArray();
+      // Get the most recent backup across all users
+      const latestBackup = await db.collection('databaseBackups')
+        .find({})
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
       
-      if (googleDriveConfigs.length === 0) {
+      if (latestBackup.length === 0) {
+        console.log('🔍 No backups found in database');
         return null;
       }
       
-      let latestBackupTime: number | null = null;
+      const backupTime = new Date(latestBackup[0].createdAt).getTime();
+      console.log(`🔍 Found latest backup: ${new Date(backupTime).toLocaleString()}`);
+      return backupTime;
       
-      // Check each user's backups to find the most recent one
-      for (const config of googleDriveConfigs) {
-        const backups = await db.collection('databaseBackups')
-          .find({ userId: config.userId })
-          .sort({ createdAt: -1 })
-          .limit(1)
-          .toArray();
-        
-        if (backups.length > 0) {
-          const backupTime = new Date(backups[0].createdAt).getTime();
-          if (!latestBackupTime || backupTime > latestBackupTime) {
-            latestBackupTime = backupTime;
-          }
-        }
-      }
-      
-      return latestBackupTime;
     } catch (error) {
-      console.error('Error getting last backup time from drive:', error);
+      console.error('Error getting last backup time from database:', error);
       return null;
     }
+  }
+
+  // Method to check if backup is needed (simple 30-minute rule)
+  async isBackupNeeded(): Promise<boolean> {
+    const lastBackupTime = await this.getLastBackupTimeFromDrive();
+    
+    if (!lastBackupTime) {
+      console.log('⚡ No previous backup found - backup needed');
+      return true;
+    }
+    
+    const now = Date.now();
+    const timeSinceLastBackup = now - lastBackupTime;
+    const thirtyMinutes = 30 * 60 * 1000;
+    
+    const isNeeded = timeSinceLastBackup >= thirtyMinutes;
+    
+    console.log(`🔍 Backup check: Last backup ${Math.floor(timeSinceLastBackup / (60 * 1000))} minutes ago, needed: ${isNeeded}`);
+    
+    return isNeeded;
   }
 
   // Method to get the time until next backup (in minutes) - Simple logic: last backup + 30 minutes
@@ -518,7 +526,6 @@ export class GlobalBackupManager {
     
     if (!lastBackupTime) {
       // No backups exist, should backup now
-      console.log('🔍 No previous backups found, backup needed now');
       return 0;
     }
     
@@ -526,11 +533,8 @@ export class GlobalBackupManager {
     const nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL; // Simple: last backup + 30 minutes
     const timeLeft = nextBackupTime - now;
     
-    console.log(`🔍 Timing check: Last backup ${new Date(lastBackupTime).toLocaleString()}, Next due ${new Date(nextBackupTime).toLocaleString()}, Minutes left: ${Math.ceil(timeLeft / (60 * 1000))}`);
-    
     if (timeLeft <= 0) {
       // Time has passed, should backup now
-      console.log('⏰ Backup time has elapsed, backup needed now');
       return 0;
     }
     
@@ -540,7 +544,18 @@ export class GlobalBackupManager {
   // Method to get backup status info - Simple logic
   async getBackupStatus() {
     const lastBackupTime = await this.getLastBackupTimeFromDrive();
-    const nextBackupTime = lastBackupTime ? lastBackupTime + this.BACKUP_INTERVAL : Date.now(); // Simple: last + 30 mins
+    const now = Date.now();
+    
+    // Calculate next backup time properly
+    let nextBackupTime: number | null = null;
+    if (lastBackupTime) {
+      nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL;
+      // If next backup time is in the past, it means backup is overdue
+      if (nextBackupTime <= now) {
+        nextBackupTime = now; // Should backup now
+      }
+    }
+    
     const minutesUntilNext = await this.getTimeUntilNextBackup();
     
     return {
