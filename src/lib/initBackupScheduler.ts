@@ -3,17 +3,21 @@ import { globalBackupManager } from '@/lib/databaseBackupService';
 // Global flag to prevent multiple initializations
 let globalBackupManagerInitialized = false;
 let initializationAttempts = 0;
-const MAX_INIT_ATTEMPTS = 3;
+const MAX_INIT_ATTEMPTS = 5; // Increased to 5 attempts
 
 export async function initializeBackupScheduler() {
-  if (globalBackupManagerInitialized) {
-    console.log('✅ Backup scheduler already initialized globally');
+  // If already initialized and running, don't do anything
+  const status = globalBackupManager.getStatus();
+  if (status.running) {
+    console.log('✅ Backup scheduler already running');
+    globalBackupManagerInitialized = true;
     return;
   }
-
+  
+  // If we hit max attempts, log but still allow another try (resetting attempts)
   if (initializationAttempts >= MAX_INIT_ATTEMPTS) {
-    console.log(`❌ Max initialization attempts (${MAX_INIT_ATTEMPTS}) reached for backup scheduler`);
-    return;
+    console.log(`⚠️ Max initialization attempts (${MAX_INIT_ATTEMPTS}) reached for backup scheduler, resetting counter`);
+    initializationAttempts = 0;
   }
 
   initializationAttempts++;
@@ -21,17 +25,16 @@ export async function initializeBackupScheduler() {
   try {
     console.log(`🚀 [Attempt ${initializationAttempts}/${MAX_INIT_ATTEMPTS}] Initializing global backup scheduler...`);
     
-    // Check if it's already running
-    const status = globalBackupManager.getStatus();
-    if (status.running) {
-      console.log('✅ Backup scheduler already running');
-      globalBackupManagerInitialized = true;
-      return;
-    }
-
+    // Stop any existing scheduler to avoid duplicate intervals
+    await globalBackupManager.stopGlobalBackupScheduler();
+    
+    // Check if it's initializing
     if (status.initializing) {
       console.log('⏳ Backup scheduler already initializing, waiting...');
-      return;
+      
+      // Wait a bit and try again
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return initializeBackupScheduler();
     }
     
     // Start the global backup scheduler
@@ -54,6 +57,8 @@ export async function initializeBackupScheduler() {
       }, 5000);
     } else {
       console.error('💥 All initialization attempts failed for backup scheduler');
+      // Reset counter for future attempts
+      initializationAttempts = 0;
     }
   }
 }
@@ -77,7 +82,14 @@ export async function forceRestartBackupScheduler() {
     await initializeBackupScheduler();
     
     console.log('✅ Backup scheduler force restart completed');
+    
+    // Return success status
+    return { success: true, message: 'Backup scheduler restarted successfully' };
   } catch (error) {
     console.error('❌ Error force restarting backup scheduler:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
   }
 }

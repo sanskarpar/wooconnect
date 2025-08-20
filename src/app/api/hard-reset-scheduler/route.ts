@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 import { globalBackupManager } from '@/lib/databaseBackupService';
+import { forceRestartBackupScheduler } from '@/lib/initBackupScheduler';
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,26 +26,40 @@ export async function POST(req: NextRequest) {
     // Get current backup status before restart
     const beforeStatus = await globalBackupManager.getBackupStatus();
     
-    // Start fresh scheduler
-    await globalBackupManager.startGlobalBackupScheduler();
+    // Use the dedicated restart function for a clean start
+    await forceRestartBackupScheduler();
     
     // Get status after restart
     const afterStatus = await globalBackupManager.getBackupStatus();
+    const schedulerStatus = globalBackupManager.getStatus();
+    
+    // Check for backup needs and force a backup
+    console.log('⚡ HARD RESET: Running an immediate backup after restart');
+    try {
+      await globalBackupManager.performGlobalBackup();
+      console.log('✅ HARD RESET: Immediate backup completed successfully');
+    } catch (backupError) {
+      console.error('❌ HARD RESET: Immediate backup failed:', backupError);
+    }
+    
+    // Get final status after backup
+    const finalStatus = await globalBackupManager.getBackupStatus();
     
     console.log('✅ HARD RESET: Backup scheduler completely restarted');
     
     return NextResponse.json({
       success: true,
-      message: 'Backup scheduler completely restarted',
+      message: 'Backup scheduler completely restarted and immediate backup triggered',
       before: {
         lastBackup: beforeStatus.lastBackupTime ? new Date(beforeStatus.lastBackupTime).toLocaleString() : 'None',
         minutesUntilNext: beforeStatus.minutesUntilNext
       },
       after: {
-        lastBackup: afterStatus.lastBackupTime ? new Date(afterStatus.lastBackupTime).toLocaleString() : 'None',
-        nextBackup: afterStatus.nextBackupFormatted,
-        minutesUntilNext: afterStatus.minutesUntilNext,
-        schedulerRunning: globalBackupManager.getStatus().running
+        schedulerRunning: schedulerStatus.running,
+        schedulerHasInterval: schedulerStatus.intervalId,
+        lastBackup: finalStatus.lastBackupTime ? new Date(finalStatus.lastBackupTime).toLocaleString() : 'None',
+        nextBackup: finalStatus.nextBackupFormatted,
+        minutesUntilNext: finalStatus.minutesUntilNext
       }
     });
     

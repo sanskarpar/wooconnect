@@ -21,14 +21,14 @@ export async function POST(req: NextRequest) {
         backupRun: true
       });
     } else {
-      // Check when the next backup is due
-      const minutesUntilNext = await globalBackupManager.getTimeUntilNextBackup();
+      // Force a backup anyway when this endpoint is called
+      console.log('✓ No backup needed at this time, but forcing one anyway since endpoint was called.');
+      await globalBackupManager.performGlobalBackup();
       
       return NextResponse.json({
         success: true,
-        message: `No backup needed at this time. Next backup in ${minutesUntilNext} minutes.`,
-        backupRun: false,
-        minutesUntilNext
+        message: 'Backup was forced even though not needed',
+        backupRun: true
       });
     }
   } catch (error) {

@@ -399,6 +399,7 @@ export class GlobalBackupManager {
   private isRunning = false;
   private isInitializing = false;
   public readonly BACKUP_INTERVAL = 30 * 60 * 1000; // 30 minutes in milliseconds
+  private lastBackupCheck: number = 0;
 
   private constructor() {}
 
@@ -436,8 +437,20 @@ export class GlobalBackupManager {
       }
       
       // Schedule backups to check every 1 minute (more frequent checks)
+      // Clear any existing interval first to prevent duplicates
+      if (this.intervalId) {
+        clearInterval(this.intervalId);
+      }
+      
       this.intervalId = setInterval(async () => {
         try {
+          // Prevent excessive logging by only checking every 5 seconds
+          const now = Date.now();
+          if (now - this.lastBackupCheck < 5000) {
+            return;
+          }
+          this.lastBackupCheck = now;
+          
           // Always check for backup need
           const needsBackupNow = await this.isBackupNeeded();
           
@@ -452,7 +465,7 @@ export class GlobalBackupManager {
         } catch (error) {
           console.error('❌ Error in automatic backup check:', error);
         }
-      }, 1 * 60 * 1000); // Check every 1 minute for more responsiveness
+      }, 60 * 1000); // Check every 1 minute for responsiveness
       
       this.isRunning = true;
       console.log('✅ Global backup scheduler started successfully');
@@ -473,7 +486,7 @@ export class GlobalBackupManager {
     console.log('🛑 Global backup scheduler stopped');
   }
 
-  // Method to get the actual last backup time from Google Drive
+  // Method to get the actual last backup time from database
   async getLastBackupTimeFromDrive(): Promise<number | null> {
     try {
       const client = await clientPromise;
@@ -501,7 +514,7 @@ export class GlobalBackupManager {
     }
   }
 
-  // Method to check if backup is needed (simple 30-minute rule)
+  // Method to check if backup is needed (exact 30-minute rule)
   async isBackupNeeded(): Promise<boolean> {
     const lastBackupTime = await this.getLastBackupTimeFromDrive();
     
@@ -512,22 +525,22 @@ export class GlobalBackupManager {
     
     const now = Date.now();
     const timeSinceLastBackup = now - lastBackupTime;
-    const thirtyMinutes = 30 * 60 * 1000;
+    const thirtyMinutes = 30 * 60 * 1000; // Exactly 30 minutes
     
-    // If it's been more than 29 minutes (giving a 1-minute buffer), backup is needed
-    const isNeeded = timeSinceLastBackup >= (29 * 60 * 1000);
+    // If it's been at least 30 minutes, backup is needed
+    const isNeeded = timeSinceLastBackup >= thirtyMinutes;
     
     const minutesSinceLastBackup = Math.floor(timeSinceLastBackup / (60 * 1000));
     console.log(`🔍 Backup check: Last backup ${minutesSinceLastBackup} minutes ago, needed: ${isNeeded}`);
     
     if (isNeeded) {
-      console.log('⚡ BACKUP NEEDED NOW - Time has elapsed since last backup');
+      console.log('⚡ BACKUP NEEDED NOW - 30 minutes has elapsed since last backup');
     }
     
     return isNeeded;
   }
 
-  // Method to get the time until next backup (in minutes) - Simple logic: last backup + 30 minutes
+  // Method to get the time until next backup (in minutes)
   async getTimeUntilNextBackup(): Promise<number> {
     const lastBackupTime = await this.getLastBackupTimeFromDrive();
     
@@ -538,12 +551,12 @@ export class GlobalBackupManager {
     }
     
     const now = Date.now();
-    const nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL; // Simple: last backup + 30 minutes
+    const nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL; // Exactly 30 minutes after last backup
     const timeLeft = nextBackupTime - now;
     
-    if (timeLeft <= 0) { // If time has passed, backup is due now but schedule it shortly
+    if (timeLeft <= 0) { // If time has passed, backup is due now
       console.log('⚡ Backup is overdue - scheduling immediately');
-      return 1; // Return 1 minute instead of 0 to avoid confusion in UI
+      return 0;
     }
     
     const minutesLeft = Math.ceil(timeLeft / (60 * 1000)); // Convert to minutes, always round up
@@ -551,7 +564,7 @@ export class GlobalBackupManager {
     return minutesLeft;
   }
 
-  // Method to get backup status info - Simple logic
+  // Method to get backup status info
   async getBackupStatus() {
     const lastBackupTime = await this.getLastBackupTimeFromDrive();
     const now = Date.now();
@@ -562,7 +575,7 @@ export class GlobalBackupManager {
       nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL;
       // If next backup time is in the past, it means backup is overdue
       if (nextBackupTime <= now) {
-        nextBackupTime = now + (1 * 60 * 1000); // Schedule a backup in 1 minute from now
+        nextBackupTime = now; // Backup should happen immediately
       }
     }
     

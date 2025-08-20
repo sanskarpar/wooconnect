@@ -37,10 +37,19 @@ if (typeof window === 'undefined') {
     });
   }, 10000); // 10 seconds delay
   
-  // Set additional periodic checks to ensure the scheduler keeps running
+  // Set additional periodic health checks to ensure the scheduler keeps running
   setInterval(() => {
-    initializeBackupScheduler().then(() => {
-      console.log('✅ Periodic backup scheduler check completed');
+    // Check if the scheduler is running
+    const status = globalBackupManager.getStatus();
+    if (!status.running) {
+      console.log('⚠️ Periodic check: Backup scheduler not running - restarting...');
+      initializeBackupScheduler().then(() => {
+        console.log('✅ Periodic backup scheduler restart completed');
+      }).catch((error) => {
+        console.error('❌ Periodic backup scheduler restart failed:', error);
+      });
+    } else {
+      console.log('✅ Periodic check: Backup scheduler is running');
       
       // Also check if backup is needed during periodic check
       globalBackupManager.isBackupNeeded().then((needsBackup) => {
@@ -53,10 +62,8 @@ if (typeof window === 'undefined') {
       }).catch((error) => {
         console.error('❌ Failed to check if backup is needed during periodic check:', error);
       });
-    }).catch((error) => {
-      console.error('❌ Periodic backup scheduler check failed:', error);
-    });
-  }, 3 * 60 * 1000); // Check every 3 minutes (more frequent checks)
+    }
+  }, 2 * 60 * 1000); // Check every 2 minutes (more frequent checks)
 }
 
 export const backupSchedulerInitialized = true;

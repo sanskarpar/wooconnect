@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { globalBackupManager } from '@/lib/databaseBackupService';
+import { initializeBackupScheduler } from '@/lib/initBackupScheduler';
 
 export async function POST() {
   try {
     console.log('🔄 FORCE BACKUP: Manual trigger initiated');
+    
+    // First ensure the backup scheduler is running
+    const schedulerStatus = globalBackupManager.getStatus();
+    if (!schedulerStatus.running) {
+      console.log('⚠️ FORCE BACKUP: Backup scheduler not running - restarting it first');
+      await initializeBackupScheduler();
+    }
     
     // Get current backup status
     const status = await globalBackupManager.getBackupStatus();

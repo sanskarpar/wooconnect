@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
 import { globalBackupManager } from '@/lib/databaseBackupService';
+import { forceRestartBackupScheduler } from '@/lib/initBackupScheduler';
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,25 +19,46 @@ export async function POST(req: NextRequest) {
     if (action === 'restart') {
       console.log('🔄 Manual backup scheduler restart requested by user:', session.user.id);
       
-      // Stop current scheduler
-      await globalBackupManager.stopGlobalBackupScheduler();
+      // Get status before restart
+      const beforeStatus = globalBackupManager.getStatus();
       
-      // Wait a moment
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Use the dedicated restart function to ensure proper cleanup
+      const result = await forceRestartBackupScheduler();
       
-      // Start fresh
-      await globalBackupManager.startGlobalBackupScheduler();
+      // Get status after restart
+      const afterStatus = globalBackupManager.getStatus();
+      
+      // Check for immediate backup needs
+      const backupStatus = await globalBackupManager.getBackupStatus();
+      const needsBackup = await globalBackupManager.isBackupNeeded();
+      
+      if (needsBackup) {
+        console.log('⚡ Backup needed after restart - running immediately');
+        await globalBackupManager.performGlobalBackup();
+      }
       
       return NextResponse.json({
         success: true,
-        message: 'Backup scheduler restarted successfully'
+        message: 'Backup scheduler restarted successfully',
+        diagnostics: {
+          before: beforeStatus,
+          after: afterStatus,
+          backupNeeded: needsBackup,
+          minutesUntilNextBackup: backupStatus.minutesUntilNext
+        }
       });
     } else if (action === 'status') {
       const status = globalBackupManager.getStatus();
+      const backupStatus = await globalBackupManager.getBackupStatus();
       
       return NextResponse.json({
         success: true,
-        status
+        schedulerStatus: status,
+        backupStatus: {
+          lastBackupTime: backupStatus.lastBackupTime ? new Date(backupStatus.lastBackupTime).toLocaleString() : null,
+          nextBackupDue: backupStatus.nextBackupFormatted,
+          minutesUntilNext: backupStatus.minutesUntilNext
+        }
       });
     } else {
       return NextResponse.json({
@@ -49,7 +71,8 @@ export async function POST(req: NextRequest) {
     
     return NextResponse.json({
       success: false,
-      error: 'Failed to perform backup scheduler operation'
+      error: 'Failed to perform backup scheduler operation',
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }
