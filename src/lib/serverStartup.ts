@@ -41,10 +41,22 @@ if (typeof window === 'undefined') {
   setInterval(() => {
     initializeBackupScheduler().then(() => {
       console.log('✅ Periodic backup scheduler check completed');
+      
+      // Also check if backup is needed during periodic check
+      globalBackupManager.isBackupNeeded().then((needsBackup) => {
+        if (needsBackup) {
+          console.log('⚡ Periodic check: Backup needed - running now');
+          globalBackupManager.performGlobalBackup().catch((error) => {
+            console.error('❌ Periodic backup failed:', error);
+          });
+        }
+      }).catch((error) => {
+        console.error('❌ Failed to check if backup is needed during periodic check:', error);
+      });
     }).catch((error) => {
       console.error('❌ Periodic backup scheduler check failed:', error);
     });
-  }, 5 * 60 * 1000); // Check every 5 minutes
+  }, 3 * 60 * 1000); // Check every 3 minutes (more frequent checks)
 }
 
 export const backupSchedulerInitialized = true;

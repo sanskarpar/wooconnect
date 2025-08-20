@@ -25,25 +25,17 @@ export async function POST(req: NextRequest) {
       shouldBackupNow: status.minutesUntilNext === 0
     });
     
-    if (status.minutesUntilNext === 0) {
-      console.log('⚡ Triggering immediate backup - time has elapsed');
+    // Always trigger a backup when this endpoint is called
+    console.log('⚡ Triggering immediate backup - manual request');
       
-      // Trigger the backup process
-      await globalBackupManager.performGlobalBackup();
+    // Trigger the backup process
+    await globalBackupManager.performGlobalBackup();
       
-      return NextResponse.json({
-        success: true,
-        message: 'Backup triggered successfully',
-        wasOverdue: true
-      });
-    } else {
-      return NextResponse.json({
-        success: true,
-        message: `Next backup in ${status.minutesUntilNext} minutes`,
-        wasOverdue: false,
-        minutesUntilNext: status.minutesUntilNext
-      });
-    }
+    return NextResponse.json({
+      success: true,
+      message: 'Backup triggered successfully',
+      wasRequested: true
+    });
     
   } catch (error) {
     console.error('Error in backup check:', error);

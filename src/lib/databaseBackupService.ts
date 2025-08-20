@@ -421,28 +421,28 @@ export class GlobalBackupManager {
     }
 
     this.isInitializing = true;
-    console.log('🚀 Starting global backup scheduler (checks every 2 minutes, backs up every 30 minutes)');
+    console.log('🚀 Starting global backup scheduler (checks every 1 minute, backs up every 30 minutes)');
     
     try {
-      // Check if we need to do an immediate backup
+      // Force check for immediate backup need
       const needsBackup = await this.isBackupNeeded();
       
       if (needsBackup) {
-        console.log('🔄 Running immediate backup (time has elapsed)...');
+        console.log('⚡ Running immediate backup on startup (time has elapsed)...');
         await this.performGlobalBackup();
       } else {
         const minutesLeft = await this.getTimeUntilNextBackup();
         console.log(`⏱️ Next backup due in ${minutesLeft} minutes`);
       }
       
-      // Schedule backups to check every 2 minutes
+      // Schedule backups to check every 1 minute (more frequent checks)
       this.intervalId = setInterval(async () => {
         try {
           // Always check for backup need
           const needsBackupNow = await this.isBackupNeeded();
           
           if (needsBackupNow) {
-            console.log('⚡ AUTO: 30 minutes elapsed - starting automatic backup...');
+            console.log('⚡ AUTO: Time elapsed - starting automatic backup...');
             await this.performGlobalBackup();
             console.log('✅ AUTO: Automatic backup completed successfully');
           } else {
@@ -452,7 +452,7 @@ export class GlobalBackupManager {
         } catch (error) {
           console.error('❌ Error in automatic backup check:', error);
         }
-      }, 2 * 60 * 1000); // Check every 2 minutes
+      }, 1 * 60 * 1000); // Check every 1 minute for more responsiveness
       
       this.isRunning = true;
       console.log('✅ Global backup scheduler started successfully');
@@ -514,10 +514,15 @@ export class GlobalBackupManager {
     const timeSinceLastBackup = now - lastBackupTime;
     const thirtyMinutes = 30 * 60 * 1000;
     
-    const isNeeded = timeSinceLastBackup >= thirtyMinutes;
+    // If it's been more than 29 minutes (giving a 1-minute buffer), backup is needed
+    const isNeeded = timeSinceLastBackup >= (29 * 60 * 1000);
     
     const minutesSinceLastBackup = Math.floor(timeSinceLastBackup / (60 * 1000));
     console.log(`🔍 Backup check: Last backup ${minutesSinceLastBackup} minutes ago, needed: ${isNeeded}`);
+    
+    if (isNeeded) {
+      console.log('⚡ BACKUP NEEDED NOW - Time has elapsed since last backup');
+    }
     
     return isNeeded;
   }
@@ -528,6 +533,7 @@ export class GlobalBackupManager {
     
     if (!lastBackupTime) {
       // No backups exist, should backup now
+      console.log('🔄 No previous backups found - backup is due immediately');
       return 0;
     }
     
@@ -535,12 +541,15 @@ export class GlobalBackupManager {
     const nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL; // Simple: last backup + 30 minutes
     const timeLeft = nextBackupTime - now;
     
-    if (timeLeft <= 0) {
-      // Time has passed, should backup now
+    if (timeLeft <= 60000) { // If less than 1 minute left, consider it due now
+      // Time has passed or almost passed, should backup now
+      console.log('⚡ Backup is due now or very soon');
       return 0;
     }
     
-    return Math.ceil(timeLeft / (60 * 1000)); // Convert to minutes, always round up
+    const minutesLeft = Math.ceil(timeLeft / (60 * 1000)); // Convert to minutes, always round up
+    console.log(`⏱️ Next backup in ${minutesLeft} minutes`);
+    return minutesLeft;
   }
 
   // Method to get backup status info - Simple logic

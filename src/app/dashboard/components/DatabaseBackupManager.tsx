@@ -52,11 +52,11 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
       loadBackups();
     }
 
-    // Set up periodic status checking every 15 seconds
+    // Set up periodic status checking every 5 seconds for more responsive UI updates
     const statusInterval = setInterval(() => {
       checkGoogleDriveStatus();
       checkSchedulerStatus();
-    }, 15000);
+    }, 5000);
 
     // Set up countdown timer that updates every minute
     const countdownInterval = setInterval(() => {
@@ -111,6 +111,18 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
         // Update countdown from the latest data
         if (data.backupTiming?.minutesUntilNext) {
           setCountdown(data.backupTiming.minutesUntilNext);
+          
+          // If backup is due (0 minutes until next), trigger a force check
+          if (data.backupTiming.minutesUntilNext === 0) {
+            console.log('⚡ Backup is due now - forcing backup check');
+            
+            // Call the force-backup-if-needed endpoint
+            try {
+              await fetch('/api/force-backup-if-needed', { method: 'POST' });
+            } catch (forceError) {
+              console.error('Error forcing backup check:', forceError);
+            }
+          }
         }
       }
     } catch (error) {
@@ -185,9 +197,10 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
       
       if (response.ok) {
         setMessage({ type: 'success', text: `Manual backup created successfully! Backup ID: ${data.backupId}` });
-        // Reload backups list and refresh Google Drive status
+        // Reload backups list and refresh statuses
         await loadBackups();
         await checkGoogleDriveStatus();
+        await checkSchedulerStatus(); // Also refresh scheduler status
       } else {
         setMessage({ type: 'error', text: data.message || 'Failed to create backup' });
       }
@@ -195,6 +208,11 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
       setMessage({ type: 'error', text: 'Error creating backup' });
     } finally {
       setCreatingBackup(false);
+      // Force another check after a short delay
+      setTimeout(() => {
+        checkSchedulerStatus();
+        loadBackups();
+      }, 2000);
     }
   };
 
