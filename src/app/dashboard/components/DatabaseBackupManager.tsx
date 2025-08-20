@@ -309,26 +309,27 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
             <button
               onClick={async () => {
                 try {
-                  const response = await fetch('/api/force-backup', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                  });
+                  const response = await fetch('/api/backup-health-check');
                   const data = await response.json();
                   
                   if (data.success) {
-                    setMessage({ type: 'success', text: 'Backup forced successfully!' });
-                    await checkSchedulerStatus();
+                    const health = data.health;
+                    const status = `Scheduler: ${health.scheduler.isRunning ? 'Running' : 'Stopped'} | Last backup: ${health.backup.lastBackupFormatted} | Next: ${health.backup.minutesUntilNext} min`;
+                    setMessage({ 
+                      type: health.recommendations.shouldRestart ? 'error' : 'success', 
+                      text: status 
+                    });
                   } else {
-                    setMessage({ type: 'error', text: data.error || 'Failed to force backup' });
+                    setMessage({ type: 'error', text: 'Health check failed' });
                   }
                 } catch (error) {
-                  setMessage({ type: 'error', text: 'Failed to force backup' });
+                  setMessage({ type: 'error', text: 'Failed to check system health' });
                 }
               }}
-              className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2 text-sm"
+              className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2 text-sm"
             >
-              <RefreshCw className="h-4 w-4" />
-              Force Backup Now
+              <CheckCircle className="h-4 w-4" />
+              Health Check
             </button>
             {schedulerStatus && !schedulerStatus.running && (
               <button
