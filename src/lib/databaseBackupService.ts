@@ -434,17 +434,22 @@ export class GlobalBackupManager {
         console.log(`⏱️ Next backup due in ${minutesUntilNext} minutes`);
       }
       
-      // Schedule backups to check every 5 minutes and backup when time is reached
+      // Schedule backups to check every 2 minutes and backup when time is reached
       this.intervalId = setInterval(async () => {
-        const minutesLeft = await this.getTimeUntilNextBackup();
-        
-        if (minutesLeft === 0) {
-          console.log('🔄 Starting scheduled backup (30 minutes elapsed)...');
-          await this.performGlobalBackup();
-        } else {
-          console.log(`⏰ Next backup in ${minutesLeft} minutes`);
+        try {
+          const minutesLeft = await this.getTimeUntilNextBackup();
+          
+          if (minutesLeft === 0) {
+            console.log('🔄 AUTO: Starting scheduled backup (30 minutes elapsed)...');
+            await this.performGlobalBackup();
+            console.log('✅ AUTO: Scheduled backup completed successfully');
+          } else {
+            console.log(`⏰ AUTO: Next backup in ${minutesLeft} minutes`);
+          }
+        } catch (error) {
+          console.error('❌ Error in scheduled backup check:', error);
         }
-      }, 5 * 60 * 1000); // Check every 5 minutes
+      }, 2 * 60 * 1000); // Check every 2 minutes for more responsive scheduling
       
       this.isRunning = true;
       console.log('✅ Global backup scheduler started successfully');
@@ -507,31 +512,35 @@ export class GlobalBackupManager {
     }
   }
 
-  // Method to get the time until next backup (in minutes)
+  // Method to get the time until next backup (in minutes) - Simple logic: last backup + 30 minutes
   async getTimeUntilNextBackup(): Promise<number> {
     const lastBackupTime = await this.getLastBackupTimeFromDrive();
     
     if (!lastBackupTime) {
       // No backups exist, should backup now
+      console.log('🔍 No previous backups found, backup needed now');
       return 0;
     }
     
     const now = Date.now();
-    const nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL;
+    const nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL; // Simple: last backup + 30 minutes
     const timeLeft = nextBackupTime - now;
+    
+    console.log(`🔍 Timing check: Last backup ${new Date(lastBackupTime).toLocaleString()}, Next due ${new Date(nextBackupTime).toLocaleString()}, Minutes left: ${Math.ceil(timeLeft / (60 * 1000))}`);
     
     if (timeLeft <= 0) {
       // Time has passed, should backup now
+      console.log('⏰ Backup time has elapsed, backup needed now');
       return 0;
     }
     
     return Math.ceil(timeLeft / (60 * 1000)); // Convert to minutes, always round up
   }
 
-  // Method to get backup status info
+  // Method to get backup status info - Simple logic
   async getBackupStatus() {
     const lastBackupTime = await this.getLastBackupTimeFromDrive();
-    const nextBackupTime = lastBackupTime ? lastBackupTime + this.BACKUP_INTERVAL : null;
+    const nextBackupTime = lastBackupTime ? lastBackupTime + this.BACKUP_INTERVAL : Date.now(); // Simple: last + 30 mins
     const minutesUntilNext = await this.getTimeUntilNextBackup();
     
     return {

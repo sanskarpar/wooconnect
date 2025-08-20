@@ -309,30 +309,26 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
             <button
               onClick={async () => {
                 try {
-                  const response = await fetch('/api/check-backup-now', {
+                  const response = await fetch('/api/force-backup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                   });
                   const data = await response.json();
                   
                   if (data.success) {
-                    if (data.wasOverdue) {
-                      setMessage({ type: 'success', text: 'Overdue backup triggered successfully!' });
-                    } else {
-                      setMessage({ type: 'success', text: data.message });
-                    }
+                    setMessage({ type: 'success', text: 'Backup forced successfully!' });
                     await checkSchedulerStatus();
                   } else {
-                    setMessage({ type: 'error', text: data.error || 'Failed to check backup' });
+                    setMessage({ type: 'error', text: data.error || 'Failed to force backup' });
                   }
                 } catch (error) {
-                  setMessage({ type: 'error', text: 'Failed to check backup status' });
+                  setMessage({ type: 'error', text: 'Failed to force backup' });
                 }
               }}
-              className="px-3 py-1 bg-orange-600 text-white rounded-md hover:bg-orange-700 flex items-center gap-2 text-sm"
+              className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2 text-sm"
             >
-              <Clock className="h-4 w-4" />
-              Check Backup Now
+              <RefreshCw className="h-4 w-4" />
+              Force Backup Now
             </button>
             {schedulerStatus && !schedulerStatus.running && (
               <button
