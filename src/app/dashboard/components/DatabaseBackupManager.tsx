@@ -354,30 +354,6 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
                 Restart Scheduler
               </button>
             )}
-            <button
-              onClick={async () => {
-                try {
-                  const response = await fetch('/api/hard-reset-scheduler', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                  });
-                  const data = await response.json();
-                  
-                  if (data.success) {
-                    setMessage({ type: 'success', text: 'Scheduler completely reset and restarted!' });
-                    await checkSchedulerStatus();
-                  } else {
-                    setMessage({ type: 'error', text: data.error || 'Failed to reset scheduler' });
-                  }
-                } catch (error) {
-                  setMessage({ type: 'error', text: 'Failed to reset scheduler' });
-                }
-              }}
-              className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2 text-sm"
-            >
-              <AlertCircle className="h-4 w-4" />
-              Hard Reset
-            </button>
           </div>
         </div>
         <div className="flex items-center gap-2 text-green-700">

@@ -438,10 +438,11 @@ export class GlobalBackupManager {
       // Schedule backups to check every 2 minutes
       this.intervalId = setInterval(async () => {
         try {
+          // Always check for backup need
           const needsBackupNow = await this.isBackupNeeded();
           
           if (needsBackupNow) {
-            console.log('🔄 AUTO: 30 minutes elapsed - starting automatic backup...');
+            console.log('⚡ AUTO: 30 minutes elapsed - starting automatic backup...');
             await this.performGlobalBackup();
             console.log('✅ AUTO: Automatic backup completed successfully');
           } else {
@@ -505,7 +506,7 @@ export class GlobalBackupManager {
     const lastBackupTime = await this.getLastBackupTimeFromDrive();
     
     if (!lastBackupTime) {
-      console.log('⚡ No previous backup found - backup needed');
+      console.log('⚡ No previous backup found - backup needed immediately');
       return true;
     }
     
@@ -515,7 +516,8 @@ export class GlobalBackupManager {
     
     const isNeeded = timeSinceLastBackup >= thirtyMinutes;
     
-    console.log(`🔍 Backup check: Last backup ${Math.floor(timeSinceLastBackup / (60 * 1000))} minutes ago, needed: ${isNeeded}`);
+    const minutesSinceLastBackup = Math.floor(timeSinceLastBackup / (60 * 1000));
+    console.log(`🔍 Backup check: Last backup ${minutesSinceLastBackup} minutes ago, needed: ${isNeeded}`);
     
     return isNeeded;
   }
