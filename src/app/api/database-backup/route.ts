@@ -1,37 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { globalBackupManager } from '@/lib/databaseBackupService';
-import clientPromise from '@/lib/mongodb';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/pages/api/auth/[...nextauth]';
+import { DatabaseBackupService } from '@/lib/databaseBackupService';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
-    await globalBackupManager.performGlobalBackup();
-    return NextResponse.json({ success: true, message: 'Backup started' });
+    const session = await getServerSession(authOptions) as { user?: { id?: string } };
+    
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = session.user.id;
+    const backupService = new DatabaseBackupService(userId);
+    
+    console.log(`🔄 Manual backup requested for user: ${userId}`);
+    
+    const result = await backupService.createDatabaseBackup();
+    
+    if (result.success) {
+      return NextResponse.json({
+        success: true,
+        message: 'Database backup created successfully',
+        backupId: result.backupId
+      });
+    } else {
+      return NextResponse.json({
+        error: result.error || 'Failed to create backup'
+      }, { status: 500 });
+    }
   } catch (error) {
-    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
+    console.error('Error in backup API:', error);
+    return NextResponse.json({
+      error: 'Internal server error'
+    }, { status: 500 });
   }
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const status = await globalBackupManager.getBackupStatus();
-    const client = await clientPromise;
-    const db = client.db('wooconnect');
-    const backups = await db.collection('databaseBackups')
-      .find({})
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .toArray();
+    const session = await getServerSession(authOptions) as { user?: { id?: string } };
+    
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
+    const userId = session.user.id;
+    const backupService = new DatabaseBackupService(userId);
+    
+    const backups = await backupService.listAvailableBackups();
+    
     return NextResponse.json({
-      status,
-      recentBackups: backups.map(b => ({
-        backupId: b.backupId,
-        createdAt: b.createdAt,
-        totalDocuments: b.totalDocuments,
-        fileName: b.fileName
+      backups: backups.map(backup => ({
+        backupId: backup.backupId,
+        createdAt: backup.createdAt,
+        totalDocuments: backup.totalDocuments,
+        collections: backup.collections,
+        fileName: backup.fileName
       }))
     });
   } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Error listing backups:', error);
+    return NextResponse.json({
+      error: 'Internal server error'
+    }, { status: 500 });
   }
 }
