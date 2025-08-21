@@ -60,8 +60,7 @@ export async function GET(req: NextRequest) {
         },
         backupScheduler: {
           running: schedulerStatus.running,
-          hasInterval: schedulerStatus.intervalId,
-          initializing: schedulerStatus.initializing
+          hasInterval: schedulerStatus.intervalId
         },
         backups: {
           recentCount: recentBackupCount,
