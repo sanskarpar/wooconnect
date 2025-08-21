@@ -4,40 +4,57 @@ import { globalBackupManager } from '@/lib/databaseBackupService';
 // This endpoint checks if a backup is needed and runs it immediately if so
 export async function POST(req: NextRequest) {
   try {
-    console.log('🔄 Checking if backup is needed...');
+    console.log('🔄 Force backup endpoint called at:', new Date().toLocaleString());
     
-    // Always check if backup is needed
+    // Check if backup is needed first
     const needsBackup = await globalBackupManager.isBackupNeeded();
+    
+    console.log(`📊 Backup needed: ${needsBackup}`);
     
     if (needsBackup) {
       console.log('⚡ Backup is needed - running now');
       
-      // Trigger the backup process
-      await globalBackupManager.performGlobalBackup();
-      
-      return NextResponse.json({
-        success: true,
-        message: 'Backup was needed and has been triggered successfully',
-        backupRun: true
-      });
+      try {
+        // Trigger the backup process
+        await globalBackupManager.performGlobalBackup();
+        
+        console.log('✅ Force backup completed successfully');
+        return NextResponse.json({
+          success: true,
+          message: 'Backup was needed and has been completed successfully',
+          backupRun: true,
+          timestamp: new Date().toISOString()
+        });
+      } catch (backupError) {
+        console.error('❌ Force backup failed:', backupError);
+        return NextResponse.json({
+          success: false,
+          message: 'Backup was needed but failed to complete',
+          error: backupError instanceof Error ? backupError.message : 'Unknown backup error',
+          backupRun: false,
+          timestamp: new Date().toISOString()
+        }, { status: 500 });
+      }
     } else {
-      // Force a backup anyway when this endpoint is called
-      console.log('✓ No backup needed at this time, but forcing one anyway since endpoint was called.');
-      await globalBackupManager.performGlobalBackup();
+      const minutesLeft = await globalBackupManager.getTimeUntilNextBackup();
+      console.log(`✓ No backup needed at this time. Next backup in ${minutesLeft} minutes.`);
       
       return NextResponse.json({
         success: true,
-        message: 'Backup was forced even though not needed',
-        backupRun: true
+        message: `No backup needed at this time. Next backup in ${minutesLeft} minutes.`,
+        backupRun: false,
+        minutesUntilNext: minutesLeft,
+        timestamp: new Date().toISOString()
       });
     }
   } catch (error) {
-    console.error('Error checking backup need:', error);
+    console.error('❌ Error in force backup endpoint:', error);
     
     return NextResponse.json({
       success: false,
-      error: 'Failed to check backup need',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Failed to check backup need or perform backup',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
     }, { status: 500 });
   }
 }

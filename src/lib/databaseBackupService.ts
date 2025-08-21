@@ -422,7 +422,7 @@ export class GlobalBackupManager {
     }
 
     this.isInitializing = true;
-    console.log('🚀 Starting global backup scheduler (checks every 1 minute, backs up every 30 minutes)');
+    console.log('🚀 Starting global backup scheduler (checks every 30 seconds, backs up every 30 minutes)');
     
     try {
       // Force check for immediate backup need
@@ -436,7 +436,7 @@ export class GlobalBackupManager {
         console.log(`⏱️ Next backup due in ${minutesLeft} minutes`);
       }
       
-      // Schedule backups to check every 1 minute (more frequent checks)
+      // Schedule backups to check every 30 seconds (very frequent checks for reliability)
       // Clear any existing interval first to prevent duplicates
       if (this.intervalId) {
         clearInterval(this.intervalId);
@@ -444,28 +444,45 @@ export class GlobalBackupManager {
       
       this.intervalId = setInterval(async () => {
         try {
-          // Prevent excessive logging by only checking every 5 seconds
           const now = Date.now();
-          if (now - this.lastBackupCheck < 5000) {
-            return;
-          }
-          this.lastBackupCheck = now;
           
-          // Always check for backup need
+          // Always check for backup need without any throttling
           const needsBackupNow = await this.isBackupNeeded();
           
           if (needsBackupNow) {
             console.log('⚡ AUTO: Time elapsed - starting automatic backup...');
-            await this.performGlobalBackup();
-            console.log('✅ AUTO: Automatic backup completed successfully');
+            
+            // Log current time for debugging
+            console.log('⏰ Current time:', new Date().toLocaleString());
+            
+            try {
+              await this.performGlobalBackup();
+              console.log('✅ AUTO: Automatic backup completed successfully');
+            } catch (backupError) {
+              console.error('❌ AUTO: Backup failed:', backupError);
+              
+              // Try again in 5 minutes on failure
+              setTimeout(async () => {
+                console.log('🔄 Retrying failed backup...');
+                try {
+                  await this.performGlobalBackup();
+                  console.log('✅ Retry backup completed successfully');
+                } catch (retryError) {
+                  console.error('❌ Retry backup also failed:', retryError);
+                }
+              }, 5 * 60 * 1000);
+            }
           } else {
             const minutesLeft = await this.getTimeUntilNextBackup();
-            console.log(`⏰ AUTO: Next backup in ${minutesLeft} minutes`);
+            // Only log occasionally to avoid spam
+            if (Math.floor(now / (5 * 60 * 1000)) % 1 === 0) { // Log every 5 minutes
+              console.log(`⏰ AUTO: Next backup in ${minutesLeft} minutes (${new Date().toLocaleString()})`);
+            }
           }
         } catch (error) {
           console.error('❌ Error in automatic backup check:', error);
         }
-      }, 60 * 1000); // Check every 1 minute for responsiveness
+      }, 30 * 1000); // Check every 30 seconds for maximum reliability
       
       this.isRunning = true;
       console.log('✅ Global backup scheduler started successfully');
@@ -516,28 +533,38 @@ export class GlobalBackupManager {
 
   // Method to check if backup is needed (exact 30-minute rule)
   async isBackupNeeded(): Promise<boolean> {
-    const lastBackupTime = await this.getLastBackupTimeFromDrive();
-    
-    if (!lastBackupTime) {
-      console.log('⚡ No previous backup found - backup needed immediately');
+    try {
+      const lastBackupTime = await this.getLastBackupTimeFromDrive();
+      
+      if (!lastBackupTime) {
+        console.log('⚡ No previous backup found - backup needed immediately');
+        return true;
+      }
+      
+      const now = Date.now();
+      const timeSinceLastBackup = now - lastBackupTime;
+      const thirtyMinutes = 30 * 60 * 1000; // Exactly 30 minutes
+      
+      // If it's been at least 30 minutes, backup is needed
+      const isNeeded = timeSinceLastBackup >= thirtyMinutes;
+      
+      const minutesSinceLastBackup = Math.floor(timeSinceLastBackup / (60 * 1000));
+      
+      console.log(`🔍 Backup check: Last backup ${minutesSinceLastBackup} minutes ago (${new Date(lastBackupTime).toLocaleString()}), needed: ${isNeeded}`);
+      
+      if (isNeeded) {
+        console.log('⚡ BACKUP NEEDED NOW - 30 minutes has elapsed since last backup');
+        console.log(`   Last backup: ${new Date(lastBackupTime).toLocaleString()}`);
+        console.log(`   Current time: ${new Date(now).toLocaleString()}`);
+        console.log(`   Time elapsed: ${minutesSinceLastBackup} minutes`);
+      }
+      
+      return isNeeded;
+    } catch (error) {
+      console.error('❌ Error checking if backup is needed:', error);
+      // If there's an error checking, assume backup is needed for safety
       return true;
     }
-    
-    const now = Date.now();
-    const timeSinceLastBackup = now - lastBackupTime;
-    const thirtyMinutes = 30 * 60 * 1000; // Exactly 30 minutes
-    
-    // If it's been at least 30 minutes, backup is needed
-    const isNeeded = timeSinceLastBackup >= thirtyMinutes;
-    
-    const minutesSinceLastBackup = Math.floor(timeSinceLastBackup / (60 * 1000));
-    console.log(`🔍 Backup check: Last backup ${minutesSinceLastBackup} minutes ago, needed: ${isNeeded}`);
-    
-    if (isNeeded) {
-      console.log('⚡ BACKUP NEEDED NOW - 30 minutes has elapsed since last backup');
-    }
-    
-    return isNeeded;
   }
 
   // Method to get the time until next backup (in minutes)
@@ -606,6 +633,7 @@ export class GlobalBackupManager {
   async performGlobalBackup(): Promise<void> {
     try {
       console.log('🔄 Starting global backup process...');
+      console.log('⏰ Backup started at:', new Date().toLocaleString());
       
       const client = await clientPromise;
       const db = client.db('wooconnect');
@@ -618,8 +646,14 @@ export class GlobalBackupManager {
 
       console.log(`👥 Found ${usersWithDrive.length} users with Google Drive configured`);
 
+      if (usersWithDrive.length === 0) {
+        console.log('⚠️ No users with Google Drive configured - skipping backup');
+        return;
+      }
+
       let successCount = 0;
       let failureCount = 0;
+      const results: Array<{userId: string, success: boolean, error?: string}> = [];
 
       for (const userConfig of usersWithDrive) {
         try {
@@ -632,6 +666,7 @@ export class GlobalBackupManager {
           
           if (isExpired) {
             console.log(`⏭️ Skipping backup for user ${userId}: Token expired`);
+            results.push({ userId, success: false, error: 'Token expired' });
             continue;
           }
           
@@ -641,22 +676,43 @@ export class GlobalBackupManager {
           if (result.success) {
             console.log(`✅ Backup completed for user ${userId}: ${result.backupId}`);
             successCount++;
+            results.push({ userId, success: true });
           } else {
             console.error(`❌ Backup failed for user ${userId}: ${result.error}`);
             failureCount++;
+            results.push({ userId, success: false, error: result.error });
           }
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           console.error(`❌ Error backing up user ${userConfig.userId}:`, error);
           failureCount++;
+          results.push({ userId: userConfig.userId, success: false, error: errorMessage });
         }
         
         // Add a small delay between users to prevent overwhelming the system
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
-      console.log(`✅ Global backup process completed: ${successCount} successful, ${failureCount} failed`);
+      console.log(`✅ Global backup process completed at ${new Date().toLocaleString()}`);
+      console.log(`📊 Results: ${successCount} successful, ${failureCount} failed`);
+      
+      // Log detailed results
+      results.forEach(result => {
+        if (result.success) {
+          console.log(`  ✅ ${result.userId}: Success`);
+        } else {
+          console.log(`  ❌ ${result.userId}: Failed - ${result.error}`);
+        }
+      });
+      
+      // If all backups failed, throw an error
+      if (successCount === 0 && failureCount > 0) {
+        throw new Error(`All ${failureCount} backup attempts failed`);
+      }
+      
     } catch (error) {
       console.error('❌ Error in global backup process:', error);
+      throw error; // Re-throw to allow calling code to handle it
     }
   }
 

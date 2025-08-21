@@ -216,6 +216,53 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
     }
   };
 
+  const forceEmergencyBackup = async () => {
+    if (!confirm('This will force an immediate backup regardless of timing. Continue?')) {
+      return;
+    }
+
+    setCreatingBackup(true);
+    setMessage(null);
+    
+    try {
+      console.log('🚨 Triggering emergency backup...');
+      const response = await fetch('/api/force-backup-now', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setMessage({ 
+          type: 'success', 
+          text: `Emergency backup completed successfully! Time: ${new Date().toLocaleString()}` 
+        });
+        // Reload backups list and refresh statuses
+        await loadBackups();
+        await checkGoogleDriveStatus();
+        await checkSchedulerStatus();
+      } else {
+        setMessage({ 
+          type: 'error', 
+          text: `Emergency backup failed: ${data.message || data.error || 'Unknown error'}` 
+        });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Error triggering emergency backup' });
+      console.error('Emergency backup error:', error);
+    } finally {
+      setCreatingBackup(false);
+      // Force another check after a short delay
+      setTimeout(() => {
+        checkSchedulerStatus();
+        loadBackups();
+      }, 2000);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };
@@ -323,6 +370,18 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
                 <Play className="h-4 w-4" />
               )}
               {creatingBackup ? 'Creating...' : 'Create Backup Now'}
+            </button>
+            <button
+              onClick={forceEmergencyBackup}
+              disabled={creatingBackup}
+              className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium"
+            >
+              {creatingBackup ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <AlertCircle className="h-4 w-4" />
+              )}
+              🚨 EMERGENCY BACKUP
             </button>
             <button
               onClick={async () => {
