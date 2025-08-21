@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import clientPromise from '@/lib/mongodb';
 import { GoogleDriveService } from '@/lib/googleDriveService';
+import { ObjectId } from 'mongodb';
 
 interface BackupMetadata {
   _id?: any;
@@ -101,10 +102,8 @@ export class DatabaseBackupService {
         .toArray();
 
       if (invoices.length === 0) {
-        return {
-          success: false,
-          message: 'No invoices found to backup.'
-        };
+        console.log(`No invoices found for user ${this.userId}, creating empty backup`);
+        // Still create backup but with empty invoices array
       }
 
       // Clean up invoice data (remove sensitive internal fields)
@@ -129,8 +128,20 @@ export class DatabaseBackupService {
         invoices: cleanInvoices
       };
 
-      // Convert to JSON buffer
+      // Convert to JSON buffer with proper formatting
       const jsonString = JSON.stringify(backupData, null, 2);
+      
+      // Validate JSON before uploading
+      try {
+        JSON.parse(jsonString);
+      } catch (validateError) {
+        console.error('Generated JSON is invalid:', validateError);
+        return {
+          success: false,
+          message: 'Failed to create valid backup JSON.'
+        };
+      }
+      
       const jsonBuffer = Buffer.from(jsonString, 'utf-8');
 
       // Create filename
@@ -161,7 +172,9 @@ export class DatabaseBackupService {
         await backupsCollection.insertOne(backupMetadata);
 
         // Clean up old backups (keep only 5 most recent)
-        await this.cleanupOldBackups();
+        if (invoices.length > 0) {
+          await this.cleanupOldBackups();
+        }
 
         console.log(`✅ ${backupType} backup created successfully for user ${this.userId}: ${backupId}`);
 
@@ -196,7 +209,9 @@ export class DatabaseBackupService {
 
             const backupsCollection = db.collection('invoiceBackups');
             await backupsCollection.insertOne(backupMetadata);
-            await this.cleanupOldBackups();
+            if (invoices.length > 0) {
+              await this.cleanupOldBackups();
+            }
 
             return {
               success: true,
@@ -309,8 +324,18 @@ export class DatabaseBackupService {
         };
       }
 
-      // Parse backup data
-      const backupData: InvoiceBackupData = JSON.parse(backupFileContent);
+      // Parse backup data with better error handling
+      let backupData: InvoiceBackupData;
+      try {
+        backupData = JSON.parse(backupFileContent);
+      } catch (parseError) {
+        console.error('Failed to parse backup JSON:', parseError);
+        console.error('File content:', backupFileContent.substring(0, 500));
+        return {
+          success: false,
+          message: 'Backup file is corrupted or not valid JSON format.'
+        };
+      }
       
       if (!backupData.invoices || !Array.isArray(backupData.invoices)) {
         return {
@@ -323,7 +348,6 @@ export class DatabaseBackupService {
       const restorationTimestamp = new Date().toISOString();
 
       // Prepare invoices for restoration (convert string IDs back to ObjectId for MongoDB)
-      const { ObjectId } = require('mongodb');
       const invoicesToRestore = backupData.invoices.map(invoice => {
         const { id, ...invoiceData } = invoice;
         return {
@@ -375,12 +399,41 @@ export class DatabaseBackupService {
    */
   private async downloadBackupFile(driveService: GoogleDriveService, fileId: string): Promise<string | null> {
     try {
-      const response = await driveService.drive.files.get({
-        fileId: fileId,
-        alt: 'media'
-      });
+      // Try different methods to download the file
+      let response;
+      
+      try {
+        // First try with responseType text
+        response = await driveService.drive.files.get({
+          fileId: fileId,
+          alt: 'media'
+        }, {
+          responseType: 'text'
+        });
+      } catch (error) {
+        // Fallback to default responseType
+        response = await driveService.drive.files.get({
+          fileId: fileId,
+          alt: 'media'
+        });
+      }
 
-      return response.data;
+      // Handle different response data types
+      let fileContent = response.data;
+      
+      if (typeof fileContent === 'string') {
+        return fileContent;
+      } else if (fileContent && typeof fileContent === 'object') {
+        // If it's already an object, stringify it
+        return JSON.stringify(fileContent);
+      } else if (Buffer.isBuffer(fileContent)) {
+        // If it's a buffer, convert to string
+        return fileContent.toString('utf-8');
+      } else {
+        // Last resort - convert to string
+        return String(fileContent);
+      }
+
     } catch (error) {
       console.error('Failed to download backup file:', error);
       return null;
