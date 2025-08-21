@@ -140,16 +140,7 @@ export default function UniversalInvoiceSettings({ onSettingsUpdate }: Universal
   }, [hasUnsavedChanges]);
 
   // Preview handler
-  const handlePreview = async () => {
-    try {
-      const sampleInvoice = getSampleInvoiceData();
-      await downloadInvoicePDF(sampleInvoice, settings, "Universal Store");
-      setNotification({ type: 'success', message: 'Preview PDF generated successfully!' });
-    } catch (error) {
-      console.error('Preview error:', error);
-      setNotification({ type: 'error', message: 'Failed to generate preview PDF.' });
-    }
-  };
+  // ...existing code...
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -285,12 +276,7 @@ export default function UniversalInvoiceSettings({ onSettingsUpdate }: Universal
           <p className="text-gray-600 mt-1">Configure invoice settings that apply to all your universal invoices</p>
         </div>
         <div className="flex space-x-3">
-          <button
-            onClick={handlePreview}
-            className="px-4 py-2 text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
-          >
-            Preview PDF
-          </button>
+          {/* Preview PDF button removed */}
           <button
             onClick={handleReset}
             className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
