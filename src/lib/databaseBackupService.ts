@@ -397,7 +397,9 @@ export class GlobalBackupManager {
   private static instance: GlobalBackupManager;
   private intervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
-  private readonly BACKUP_INTERVAL_MINUTES = 30; // 30 minutes
+  private isInitializing = false;
+  public readonly BACKUP_INTERVAL = 30 * 60 * 1000; // 30 minutes in milliseconds
+  private lastBackupCheck: number = 0;
 
   private constructor() {}
 
@@ -410,27 +412,86 @@ export class GlobalBackupManager {
 
   async startGlobalBackupScheduler(): Promise<void> {
     if (this.isRunning) {
-      console.log('✅ Backup scheduler is already running');
+      console.log('Backup scheduler is already running');
       return;
     }
 
-    console.log('🚀 Starting backup scheduler - checks every 30 minutes');
-    
-    // Clear any existing interval
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
+    if (this.isInitializing) {
+      console.log('Backup scheduler is already being initialized');
+      return;
     }
+
+    this.isInitializing = true;
+    console.log('🚀 Starting global backup scheduler (checks every 30 seconds, backs up every 30 minutes)');
     
-    // Run backup check immediately on startup
-    await this.checkAndBackup();
-    
-    // Set up interval to check every 30 minutes
-    this.intervalId = setInterval(async () => {
-      await this.checkAndBackup();
-    }, this.BACKUP_INTERVAL_MINUTES * 60 * 1000);
-    
-    this.isRunning = true;
-    console.log('✅ Backup scheduler started successfully');
+    try {
+      // Force check for immediate backup need
+      const needsBackup = await this.isBackupNeeded();
+      
+      if (needsBackup) {
+        console.log('⚡ Running immediate backup on startup (time has elapsed)...');
+        await this.performGlobalBackup();
+      } else {
+        const minutesLeft = await this.getTimeUntilNextBackup();
+        console.log(`⏱️ Next backup due in ${minutesLeft} minutes`);
+      }
+      
+      // Schedule backups to check every 30 seconds (very frequent checks for reliability)
+      // Clear any existing interval first to prevent duplicates 
+      if (this.intervalId) {
+        clearInterval(this.intervalId);
+      }
+      
+      this.intervalId = setInterval(async () => {
+        try {
+          const now = Date.now();
+          
+          // Always check for backup need without any throttling
+          const needsBackupNow = await this.isBackupNeeded();
+          
+          if (needsBackupNow) {
+            console.log('⚡ AUTO: Time elapsed - starting automatic backup...');
+            
+            // Log current time for debugging
+            console.log('⏰ Current time:', new Date().toLocaleString());
+            
+            try {
+              await this.performGlobalBackup();
+              console.log('✅ AUTO: Automatic backup completed successfully');
+            } catch (backupError) {
+              console.error('❌ AUTO: Backup failed:', backupError);
+              
+              // Try again in 5 minutes on failure
+              setTimeout(async () => {
+                console.log('🔄 Retrying failed backup...');
+                try {
+                  await this.performGlobalBackup();
+                  console.log('✅ Retry backup completed successfully');
+                } catch (retryError) {
+                  console.error('❌ Retry backup also failed:', retryError);
+                }
+              }, 5 * 60 * 1000);
+            }
+          } else {
+            const minutesLeft = await this.getTimeUntilNextBackup();
+            // Only log occasionally to avoid spam
+            if (Math.floor(now / (5 * 60 * 1000)) % 1 === 0) { // Log every 5 minutes
+              console.log(`⏰ AUTO: Next backup in ${minutesLeft} minutes (${new Date().toLocaleString()})`);
+            }
+          }
+        } catch (error) {
+          console.error('❌ Error in automatic backup check:', error);
+        }
+      }, 30 * 1000); // Check every 30 seconds for maximum reliability
+      
+      this.isRunning = true;
+      console.log('✅ Global backup scheduler started successfully');
+      
+    } catch (error) {
+      console.error('Error starting backup scheduler:', error);
+    } finally {
+      this.isInitializing = false;
+    }
   }
 
   async stopGlobalBackupScheduler(): Promise<void> {
@@ -439,29 +500,16 @@ export class GlobalBackupManager {
       this.intervalId = null;
     }
     this.isRunning = false;
-    console.log('🛑 Backup scheduler stopped');
+    console.log('🛑 Global backup scheduler stopped');
   }
 
-  private async checkAndBackup(): Promise<void> {
-    try {
-      const lastBackupTime = await this.getLastBackupTime();
-      const now = Date.now();
-      
-      // If no previous backup or 30+ minutes have passed, create backup
-      if (!lastBackupTime || (now - lastBackupTime) >= (this.BACKUP_INTERVAL_MINUTES * 60 * 1000)) {
-        console.log('⚡ Starting automatic backup...');
-        await this.performGlobalBackup();
-      }
-    } catch (error) {
-      console.error('❌ Error in backup check:', error);
-    }
-  }
-
-  private async getLastBackupTime(): Promise<number | null> {
+  // Method to get the actual last backup time from database
+  async getLastBackupTimeFromDrive(): Promise<number | null> {
     try {
       const client = await clientPromise;
       const db = client.db('wooconnect');
       
+      // Get the most recent backup across all users
       const latestBackup = await db.collection('databaseBackups')
         .find({})
         .sort({ createdAt: -1 })
@@ -469,47 +517,98 @@ export class GlobalBackupManager {
         .toArray();
       
       if (latestBackup.length === 0) {
+        console.log('🔍 No backups found in database');
         return null;
       }
       
-      return new Date(latestBackup[0].createdAt).getTime();
+      const backupTime = new Date(latestBackup[0].createdAt).getTime();
+      console.log(`🔍 Found latest backup: ${new Date(backupTime).toLocaleString()}`);
+      return backupTime;
+      
     } catch (error) {
-      console.error('Error getting last backup time:', error);
+      console.error('Error getting last backup time from database:', error);
       return null;
     }
   }
 
+  // Method to check if backup is needed (exact 30-minute rule)
+  async isBackupNeeded(): Promise<boolean> {
+    try {
+      const lastBackupTime = await this.getLastBackupTimeFromDrive();
+      
+      if (!lastBackupTime) {
+        console.log('⚡ No previous backup found - backup needed immediately');
+        return true;
+      }
+      
+      const now = Date.now();
+      const timeSinceLastBackup = now - lastBackupTime;
+      const thirtyMinutes = 30 * 60 * 1000; // Exactly 30 minutes
+      
+      // If it's been at least 30 minutes, backup is needed
+      const isNeeded = timeSinceLastBackup >= thirtyMinutes;
+      
+      const minutesSinceLastBackup = Math.floor(timeSinceLastBackup / (60 * 1000));
+      
+      console.log(`🔍 Backup check: Last backup ${minutesSinceLastBackup} minutes ago (${new Date(lastBackupTime).toLocaleString()}), needed: ${isNeeded}`);
+      
+      if (isNeeded) {
+        console.log('⚡ BACKUP NEEDED NOW - 30 minutes has elapsed since last backup');
+        console.log(`   Last backup: ${new Date(lastBackupTime).toLocaleString()}`);
+        console.log(`   Current time: ${new Date(now).toLocaleString()}`);
+        console.log(`   Time elapsed: ${minutesSinceLastBackup} minutes`);
+      }
+      
+      return isNeeded;
+    } catch (error) {
+      console.error('❌ Error checking if backup is needed:', error);
+      // If there's an error checking, assume backup is needed for safety
+      return true;
+    }
+  }
+
+  // Method to get the time until next backup (in minutes)
+  async getTimeUntilNextBackup(): Promise<number> {
+    const lastBackupTime = await this.getLastBackupTimeFromDrive();
+    
+    if (!lastBackupTime) {
+      // No backups exist, should backup now
+      console.log('🔄 No previous backups found - backup is due immediately');
+      return 0;
+    }
+    
+    const now = Date.now();
+    const nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL; // Exactly 30 minutes after last backup
+    const timeLeft = nextBackupTime - now;
+    
+    if (timeLeft <= 0) { // If time has passed, backup is due now
+      console.log('⚡ Backup is overdue - scheduling immediately');
+      return 0;
+    }
+    
+    const minutesLeft = Math.ceil(timeLeft / (60 * 1000)); // Convert to minutes, always round up
+    console.log(`⏱️ Next backup in ${minutesLeft} minutes`);
+    return minutesLeft;
+  }
+
+  // Method to get backup status info
   async getBackupStatus() {
-    const lastBackupTime = await this.getLastBackupTime();
+    const lastBackupTime = await this.getLastBackupTimeFromDrive();
     const now = Date.now();
     
+    // Calculate next backup time properly
     let nextBackupTime: number | null = null;
-    let minutesUntilNext = 0;
-    
     if (lastBackupTime) {
-      nextBackupTime = lastBackupTime + (this.BACKUP_INTERVAL_MINUTES * 60 * 1000);
-      
-      if (nextBackupTime > now) {
-        minutesUntilNext = Math.ceil((nextBackupTime - now) / (60 * 1000));
-      } else {
-        // Backup is overdue
-        nextBackupTime = now;
-        minutesUntilNext = 0;
+      nextBackupTime = lastBackupTime + this.BACKUP_INTERVAL;
+      // If next backup time is in the past, it means backup is overdue
+      if (nextBackupTime <= now) {
+        nextBackupTime = now; // Backup should happen immediately
       }
     }
     
-    const lastBackupFormatted = lastBackupTime 
-      ? new Date(lastBackupTime).toLocaleString('en-US', {
-          year: 'numeric',
-          month: 'numeric',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: true
-        })
-      : null;
+    const minutesUntilNext = await this.getTimeUntilNextBackup();
     
+    // Make sure the formatted time is calculated from the proper nextBackupTime
     const nextBackupFormatted = nextBackupTime 
       ? new Date(nextBackupTime).toLocaleString('en-US', {
           year: 'numeric',
@@ -525,10 +624,9 @@ export class GlobalBackupManager {
     return {
       isRunning: this.isRunning,
       lastBackupTime: lastBackupTime,
-      lastBackupFormatted: lastBackupFormatted,
       nextBackupTime: nextBackupTime,
-      nextBackupFormatted: nextBackupFormatted,
-      minutesUntilNext: minutesUntilNext
+      minutesUntilNext: minutesUntilNext,
+      nextBackupFormatted: nextBackupFormatted
     };
   }
 
@@ -618,10 +716,11 @@ export class GlobalBackupManager {
     }
   }
 
-  getStatus(): { running: boolean; intervalId: boolean } {
+  getStatus(): { running: boolean; intervalId: boolean; initializing: boolean } {
     return {
       running: this.isRunning,
-      intervalId: this.intervalId !== null
+      intervalId: this.intervalId !== null,
+      initializing: this.isInitializing
     };
   }
 }
