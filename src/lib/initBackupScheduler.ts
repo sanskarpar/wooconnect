@@ -1,12 +1,2 @@
-import { backupScheduler } from '@/lib/simpleBackupService';
-
-export async function initializeBackupScheduler(): Promise<void> {
-  try {
-    console.log('🚀 Initializing simple backup scheduler...');
-    await backupScheduler.start();
-    console.log('✅ Simple backup scheduler initialized successfully');
-  } catch (error) {
-    console.error('❌ Failed to initialize backup scheduler:', error);
-    throw error;
-  }
-}
+// This file has been removed as part of removing the database backup system
+// Only Google Drive functionality is retained

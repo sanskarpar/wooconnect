@@ -4,7 +4,6 @@ import GoogleProvider from "next-auth/providers/google";
 import { MongoDBAdapter } from "@next-auth/mongodb-adapter";
 import clientPromise from "@/lib/mongodb";
 import { compare } from "bcryptjs";
-import { SimpleBackupService } from "@/lib/simpleBackupService";
 
 // Extend the Session type to include user.id
 declare module "next-auth" {
@@ -120,23 +119,8 @@ const authOptions = {
               { upsert: true }
             );
             
-            // Trigger immediate backup if this is a new connection
             if (isNewConnection) {
-              console.log(`🚀 New Google Drive connection detected for user ${token.sub}. Creating immediate backup...`);
-              try {
-                // Create backup asynchronously to avoid blocking the login
-                setImmediate(async () => {
-                  const backupService = new SimpleBackupService(token.sub as string);
-                  const result = await backupService.createBackup();
-                  if (result.success) {
-                    console.log(`✅ Immediate backup created for new Google Drive connection: ${result.backupId}`);
-                  } else {
-                    console.error(`❌ Failed to create immediate backup: ${result.error}`);
-                  }
-                });
-              } catch (error) {
-                console.error('Error scheduling immediate backup:', error);
-              }
+              console.log(`🚀 New Google Drive connection detected for user ${token.sub}.`);
             }
           } catch (error) {
             console.error('Error storing Google Drive tokens:', error);

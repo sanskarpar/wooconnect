@@ -5,11 +5,10 @@ import { useState, useEffect } from 'react';
 import type { jsPDF } from 'jspdf';
 // @ts-ignore
 import type autoTable from 'jspdf-autotable';
-import { CheckCircle, AlertCircle, Store, Settings, Package, ShoppingCart, Users, BarChart3, FileText, Download, Search, Filter, ChevronDown, Plus, RefreshCw, Cloud, Database } from 'lucide-react';
+import { CheckCircle, AlertCircle, Store, Settings, Package, ShoppingCart, Users, BarChart3, FileText, Download, Search, Filter, ChevronDown, Plus, RefreshCw, Cloud } from 'lucide-react';
 import { downloadInvoicePDF, type InvoiceData } from '@/lib/invoicePdfGenerator';
 import UniversalInvoiceSettings from './components/UniversalInvoiceSettings';
 import GoogleDriveSettings from './components/GoogleDriveSettings';
-import DatabaseBackupManager from './components/DatabaseBackupManager';
 import BlacklistManager from './components/BlacklistManager';
 import { applyBlacklistFilter } from '@/lib/blacklistFilter';
 import { BlacklistSettings } from '@/app/api/invoice-blacklist/route';
@@ -75,7 +74,7 @@ export default function DashboardPage() {
   const [settings, setSettings] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'unpaid' | 'overdue'>('all');
-  const [activeTab, setActiveTab] = useState<'invoices' | 'settings' | 'google-drive' | 'database-backup' | 'blacklist'>('invoices');
+  const [activeTab, setActiveTab] = useState<'invoices' | 'settings' | 'google-drive' | 'blacklist'>('invoices');
   const [blacklistSettings, setBlacklistSettings] = useState<BlacklistSettings>({
     enabled: false,
     rules: [],
@@ -332,9 +331,9 @@ export default function DashboardPage() {
     return () => clearInterval(statusInterval);
   }, []);
 
-  // Refresh Google Drive status when switching to database-backup tab
+  // Refresh Google Drive status when switching to google-drive tab
   useEffect(() => {
-    if (activeTab === 'database-backup' || activeTab === 'google-drive') {
+    if (activeTab === 'google-drive') {
       console.log(`🔄 Tab switched to ${activeTab}, refreshing Google Drive status...`);
       fetchGoogleDriveStatus();
     }
@@ -1245,19 +1244,6 @@ export default function DashboardPage() {
                 </div>
               </button>
               <button
-                onClick={() => setActiveTab('database-backup')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
-                  activeTab === 'database-backup'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <div className="flex items-center">
-                  <Database className="h-4 w-4 mr-2" />
-                  Database Backup
-                </div>
-              </button>
-              <button
                 onClick={() => setActiveTab('blacklist')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                   activeTab === 'blacklist'
@@ -1515,11 +1501,6 @@ export default function DashboardPage() {
         ) : activeTab === 'google-drive' ? (
           <div className="flex-1 overflow-auto p-6">
             <GoogleDriveSettings />
-          </div>
-        ) : activeTab === 'database-backup' ? (
-          <div className="flex-1 overflow-auto p-6">
-            {/* Debug info */}
-            <DatabaseBackupManager isGoogleDriveConnected={!!googleDriveStatus?.connected} />
           </div>
         ) : (
           <div className="flex-1 overflow-auto p-6">

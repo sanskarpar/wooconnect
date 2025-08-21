@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { backupScheduler } from '@/lib/simpleBackupService';
 import clientPromise from '@/lib/mongodb';
 
 export async function GET(req: NextRequest) {
   try {
-    const schedulerStatus = backupScheduler.getStatus();
-    
     // Check database connectivity
     let dbConnected = false;
     let userCount = 0;
@@ -32,22 +29,6 @@ export async function GET(req: NextRequest) {
       console.error('Database health check failed:', error);
     }
 
-    // Get recent backup count
-    let recentBackupCount = 0;
-    try {
-      const client = await clientPromise;
-      const db = client.db('wooconnect');
-      const backupCollection = db.collection('databaseBackups');
-      
-      // Count backups from last 24 hours
-      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      recentBackupCount = await backupCollection.countDocuments({
-        createdAt: { $gte: yesterday.toISOString() }
-      });
-    } catch (error) {
-      console.error('Backup count check failed:', error);
-    }
-
     return NextResponse.json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
@@ -57,14 +38,8 @@ export async function GET(req: NextRequest) {
           userCount,
           usersWithGoogleDrive
         },
-        backupScheduler: {
-          running: schedulerStatus.running,
-          hasInterval: schedulerStatus.running,
-          nextCheck: schedulerStatus.nextCheck
-        },
-        backups: {
-          recentCount: recentBackupCount,
-          lastCheck: new Date().toISOString()
+        googleDrive: {
+          connectedUsers: usersWithGoogleDrive
         }
       }
     });
