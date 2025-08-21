@@ -1,16 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { globalBackupManager } from '@/lib/databaseBackupService';
-import { initializeBackupScheduler } from '@/lib/initBackupScheduler';
 import clientPromise from '@/lib/mongodb';
 
 export async function GET() {
   try {
     // Get comprehensive scheduler status
-    const schedulerStatus = globalBackupManager.getStatus();
-    const backupStatus = await globalBackupManager.getBackupStatus();
-    
-    // Check if scheduler should be running but isn't
-    const shouldRestart = !schedulerStatus.running && !schedulerStatus.initializing;
+  const schedulerStatus = globalBackupManager.getStatus();
+  const backupStatus = await globalBackupManager.getBackupStatus();
     
     // Get some stats about recent backups
     let recentBackupsCount = 0;
@@ -49,24 +45,16 @@ export async function GET() {
       console.error('Error getting backup stats:', dbError);
     }
     
-    // If scheduler is not running, try to restart it
-    if (shouldRestart) {
-      try {
-        console.log('🔄 Health check detected scheduler not running - attempting restart');
-        await initializeBackupScheduler();
-        console.log('✅ Scheduler restarted by health check');
-      } catch (restartError) {
-        console.error('❌ Health check failed to restart scheduler:', restartError);
-      }
+    // If scheduler is not running, start it
+    if (!schedulerStatus.running) {
+      await globalBackupManager.startGlobalBackupScheduler();
     }
     
     const response = {
       timestamp: new Date().toISOString(),
       scheduler: {
         isRunning: schedulerStatus.running,
-        isInitializing: schedulerStatus.initializing,
-        hasInterval: schedulerStatus.intervalId,
-        autoRestartAttempted: shouldRestart
+        hasInterval: schedulerStatus.intervalId
       },
       backup: {
         lastBackupTime: backupStatus.lastBackupTime,
@@ -80,19 +68,12 @@ export async function GET() {
         totalBackupsCount: recentBackupsCount,
         oldestBackupTime: oldestBackupTime || 'None',
         newestBackupTime: newestBackupTime || 'None'
-      },
-      recommendations: {
-        shouldRestart: shouldRestart,
-        message: shouldRestart ? 'Scheduler is not running - auto-restart attempted' : 'System appears to be working correctly'
-      }
+  }
     };
     
     console.log('📊 HEALTH CHECK:', response);
     
-    return NextResponse.json({
-      success: true,
-      health: response
-    });
+  return NextResponse.json({ success: true, health: response });
     
   } catch (error) {
     console.error('❌ Health check error:', error);
