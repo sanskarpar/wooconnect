@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GlobalBackupManager } from '@/lib/databaseBackupService';
+import { backupScheduler } from '@/lib/simpleBackupService';
 import clientPromise from '@/lib/mongodb';
 
 export async function GET(req: NextRequest) {
   try {
-    const backupManager = GlobalBackupManager.getInstance();
-    const schedulerStatus = backupManager.getStatus();
+    const schedulerStatus = backupScheduler.getStatus();
     
     // Check database connectivity
     let dbConnected = false;
@@ -60,8 +59,8 @@ export async function GET(req: NextRequest) {
         },
         backupScheduler: {
           running: schedulerStatus.running,
-          hasInterval: schedulerStatus.intervalId,
-          initializing: schedulerStatus.initializing
+          hasInterval: schedulerStatus.running,
+          nextCheck: schedulerStatus.nextCheck
         },
         backups: {
           recentCount: recentBackupCount,
