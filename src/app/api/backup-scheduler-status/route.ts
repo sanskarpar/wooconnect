@@ -18,31 +18,20 @@ export async function GET(req: NextRequest) {
     const status = backupManager.getStatus();
     const backupStatus = await globalBackupManager.getBackupStatus();
 
-    // Debug logging for timing issues
-    console.log('🐛 Backup Status Debug:', {
-      lastBackupTime: backupStatus.lastBackupTime,
-      nextBackupTime: backupStatus.nextBackupTime,
-      minutesUntilNext: backupStatus.minutesUntilNext,
-      lastBackupFormatted: backupStatus.lastBackupTime ? new Date(backupStatus.lastBackupTime).toLocaleString() : null,
-      nextBackupFormatted: backupStatus.nextBackupFormatted,
-      currentTime: new Date().toISOString(),
-      currentTimeMs: Date.now()
-    });
-
     return NextResponse.json({
       authenticated: true,
       userId: session.user.id,
       backupScheduler: {
         running: status.running,
-        hasInterval: status.intervalId,
-        initializing: status.initializing
+        hasInterval: status.intervalId
       },
       backupTiming: {
         isRunning: backupStatus.isRunning,
         lastBackupTime: backupStatus.lastBackupTime,
+        lastBackupFormatted: backupStatus.lastBackupFormatted,
         nextBackupTime: backupStatus.nextBackupTime,
-        minutesUntilNext: backupStatus.minutesUntilNext,
-        nextBackupFormatted: backupStatus.nextBackupFormatted
+        nextBackupFormatted: backupStatus.nextBackupFormatted,
+        minutesUntilNext: backupStatus.minutesUntilNext
       },
       timestamp: new Date().toISOString()
     });
