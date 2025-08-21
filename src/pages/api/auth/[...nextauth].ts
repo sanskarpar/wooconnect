@@ -4,7 +4,7 @@ import GoogleProvider from "next-auth/providers/google";
 import { MongoDBAdapter } from "@next-auth/mongodb-adapter";
 import clientPromise from "@/lib/mongodb";
 import { compare } from "bcryptjs";
-import { DatabaseBackupService } from "@/lib/databaseBackupService";
+import { SimpleBackupService } from "@/lib/simpleBackupService";
 
 // Extend the Session type to include user.id
 declare module "next-auth" {
@@ -126,8 +126,8 @@ const authOptions = {
               try {
                 // Create backup asynchronously to avoid blocking the login
                 setImmediate(async () => {
-                  const backupService = new DatabaseBackupService(token.sub as string);
-                  const result = await backupService.createDatabaseBackup();
+                  const backupService = new SimpleBackupService(token.sub as string);
+                  const result = await backupService.createBackup();
                   if (result.success) {
                     console.log(`✅ Immediate backup created for new Google Drive connection: ${result.backupId}`);
                   } else {

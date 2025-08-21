@@ -103,13 +103,13 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
       if (response.ok) {
         const data = await response.json();
         setSchedulerStatus({
-          running: data.backupScheduler.running,
-          hasInterval: data.backupScheduler.hasInterval,
+          running: data.running,
+          hasInterval: data.hasInterval,
           backupTiming: data.backupTiming
         });
         
         // Update countdown from the latest data
-        if (data.backupTiming?.minutesUntilNext) {
+        if (data.backupTiming?.minutesUntilNext !== undefined) {
           setCountdown(data.backupTiming.minutesUntilNext);
           
           // If backup is due (0 minutes until next), trigger a force check
@@ -195,8 +195,11 @@ export default function DatabaseBackupManager({ isGoogleDriveConnected }: Backup
       
       const data = await response.json();
       
-      if (response.ok) {
-        setMessage({ type: 'success', text: `Manual backup created successfully! Backup ID: ${data.backupId}` });
+      if (response.ok && data.success) {
+        setMessage({ 
+          type: 'success', 
+          text: `Manual backup created successfully! Backup ID: ${data.backupId} (${data.totalDocuments} invoices backed up)` 
+        });
         // Reload backups list and refresh statuses
         await loadBackups();
         await checkGoogleDriveStatus();

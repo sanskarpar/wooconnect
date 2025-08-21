@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/pages/api/auth/[...nextauth]';
-import { DatabaseBackupService } from '@/lib/databaseBackupService';
+import { SimpleBackupService } from '@/lib/simpleBackupService';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,17 +12,18 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = session.user.id;
-    const backupService = new DatabaseBackupService(userId);
+    const backupService = new SimpleBackupService(userId);
     
     console.log(`🔄 Manual backup requested for user: ${userId}`);
     
-    const result = await backupService.createDatabaseBackup();
+    const result = await backupService.createBackup();
     
     if (result.success) {
       return NextResponse.json({
         success: true,
         message: 'Database backup created successfully',
-        backupId: result.backupId
+        backupId: result.backupId,
+        totalDocuments: result.totalDocuments
       });
     } else {
       return NextResponse.json({
@@ -46,17 +47,17 @@ export async function GET(req: NextRequest) {
     }
 
     const userId = session.user.id;
-    const backupService = new DatabaseBackupService(userId);
+    const backupService = new SimpleBackupService(userId);
     
-    const backups = await backupService.listAvailableBackups();
+    const backups = await backupService.listBackups();
     
     return NextResponse.json({
-      backups: backups.map(backup => ({
+      backups: backups.map((backup: any) => ({
         backupId: backup.backupId,
         createdAt: backup.createdAt,
         totalDocuments: backup.totalDocuments,
-        collections: backup.collections,
-        fileName: backup.fileName
+        fileName: backup.fileName,
+        status: backup.status
       }))
     });
   } catch (error) {
