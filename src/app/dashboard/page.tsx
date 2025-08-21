@@ -5,11 +5,12 @@ import { useState, useEffect } from 'react';
 import type { jsPDF } from 'jspdf';
 // @ts-ignore
 import type autoTable from 'jspdf-autotable';
-import { CheckCircle, AlertCircle, Store, Settings, Package, ShoppingCart, Users, BarChart3, FileText, Download, Search, Filter, ChevronDown, Plus, RefreshCw, Cloud } from 'lucide-react';
+import { CheckCircle, AlertCircle, Store, Settings, Package, ShoppingCart, Users, BarChart3, FileText, Download, Search, Filter, ChevronDown, Plus, RefreshCw, Cloud, Shield } from 'lucide-react';
 import { downloadInvoicePDF, type InvoiceData } from '@/lib/invoicePdfGenerator';
 import UniversalInvoiceSettings from './components/UniversalInvoiceSettings';
 import GoogleDriveSettings from './components/GoogleDriveSettings';
 import BlacklistManager from './components/BlacklistManager';
+import DatabaseBackupManager from './components/DatabaseBackupManager';
 import { applyBlacklistFilter } from '@/lib/blacklistFilter';
 import { BlacklistSettings } from '@/app/api/invoice-blacklist/route';
 
@@ -74,7 +75,7 @@ export default function DashboardPage() {
   const [settings, setSettings] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'unpaid' | 'overdue'>('all');
-  const [activeTab, setActiveTab] = useState<'invoices' | 'settings' | 'google-drive' | 'blacklist'>('invoices');
+  const [activeTab, setActiveTab] = useState<'invoices' | 'settings' | 'google-drive' | 'blacklist' | 'backup'>('invoices');
   const [blacklistSettings, setBlacklistSettings] = useState<BlacklistSettings>({
     enabled: false,
     rules: [],
@@ -1261,6 +1262,19 @@ export default function DashboardPage() {
                   )}
                 </div>
               </button>
+              <button
+                onClick={() => setActiveTab('backup')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'backup'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center">
+                  <Shield className="h-4 w-4 mr-2" />
+                  Database Backup
+                </div>
+              </button>
             </nav>
           </div>
 
@@ -1501,6 +1515,10 @@ export default function DashboardPage() {
         ) : activeTab === 'google-drive' ? (
           <div className="flex-1 overflow-auto p-6">
             <GoogleDriveSettings />
+          </div>
+        ) : activeTab === 'backup' ? (
+          <div className="flex-1 overflow-auto p-6">
+            <DatabaseBackupManager />
           </div>
         ) : (
           <div className="flex-1 overflow-auto p-6">
